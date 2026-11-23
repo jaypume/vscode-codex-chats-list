@@ -98,6 +98,15 @@ export class ConversationHistory {
     } finally { this.finish(); }
   }
 
+  async deleteThread(chat: Chat): Promise<void> {
+    if (this.disposed) throw new Error('History is closed.');
+    this.active++;
+    try {
+      await this.client.deleteThread(chat.id);
+      this.store.update(chat, Date.now(), false);
+    } finally { this.finish(); }
+  }
+
   private async classify(chats: Chat[]): Promise<Chat[]> {
     const missing = new Map<string, string>();
     for (const chat of chats) {

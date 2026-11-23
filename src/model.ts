@@ -23,7 +23,7 @@ export interface ProjectGroup {
   current: boolean;
   unknown?: boolean;
   repository?: string;
-  pinAliases?: readonly string[];
+  preferenceAliases?: readonly string[];
   chats: Chat[];
 }
 export type Scope = 'current' | 'all';
@@ -113,7 +113,7 @@ export function groupChats(chats: Chat[], roots: string[], grouping: Grouping = 
       group = {
         key, name: normalized.split('/').at(-1) || cwd, cwd: repository?.checkout ?? remote ?? cwd,
         current: inWorkspace(chat, rootKeys, workspace, grouping),
-        ...(remote ? { repository: remote, pinAliases: repository?.pinAliases } : {}),
+        ...(remote ? { repository: remote, preferenceAliases: repository?.preferenceAliases } : {}),
         ...(unknown ? { unknown: true } : {}), chats: [],
       };
       groups.set(key, group);

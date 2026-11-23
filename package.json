@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -39,8 +39,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "format": "oxfmt --write src/git.ts src/pins.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
-    "format:check": "oxfmt --check src/git.ts src/pins.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
+    "format": "oxfmt --write src/git.ts src/item-flags.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
+    "format:check": "oxfmt --check src/git.ts src/item-flags.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
     "lint": "oxlint --max-warnings=0 src",
     "lint:fix": "pnpm run lint --fix",
     "package": "node -e \"require('node:fs').mkdirSync('release-artifact', { recursive: true })\" && vsce package --no-dependencies --out release-artifact",
@@ -135,6 +135,26 @@
         "category": "Codex Chats List"
       },
       {
+        "command": "codexChatsList.hide",
+        "title": "%command.hide%",
+        "category": "Codex Chats List"
+      },
+      {
+        "command": "codexChatsList.unhide",
+        "title": "%command.unhide%",
+        "category": "Codex Chats List"
+      },
+      {
+        "command": "codexChatsList.toggleHidden",
+        "title": "%command.toggleHidden%",
+        "category": "Codex Chats List"
+      },
+      {
+        "command": "codexChatsList.delete",
+        "title": "%command.delete%",
+        "category": "Codex Chats List"
+      },
+      {
         "command": "codexChatsList.search",
         "title": "%command.search%",
         "category": "Codex Chats List",
@@ -170,6 +190,11 @@
           "group": "1_view@2"
         },
         {
+          "command": "codexChatsList.toggleHidden",
+          "when": "view == codexChatsList.list",
+          "group": "1_view@3"
+        },
+        {
           "command": "codexChatsList.search",
           "when": "view == codexChatsList.list",
           "group": "navigation@3"
@@ -188,11 +213,28 @@
       "view/item/context": [
         {
           "command": "codexChatsList.pin",
-          "when": "view == codexChatsList.list && (viewItem == project || viewItem == chat)"
+          "when": "view == codexChatsList.list && viewItem =~ /^(project|chat)(\\.hidden)?$/",
+          "group": "1_item@1"
         },
         {
           "command": "codexChatsList.unpin",
-          "when": "view == codexChatsList.list && (viewItem == pinnedProject || viewItem == pinnedChat)"
+          "when": "view == codexChatsList.list && viewItem =~ /^(pinnedProject|pinnedChat)(\\.hidden)?$/",
+          "group": "1_item@1"
+        },
+        {
+          "command": "codexChatsList.hide",
+          "when": "view == codexChatsList.list && viewItem =~ /^(project|chat|pinnedProject|pinnedChat)$/",
+          "group": "1_item@2"
+        },
+        {
+          "command": "codexChatsList.unhide",
+          "when": "view == codexChatsList.list && viewItem =~ /\\.hidden$/",
+          "group": "1_item@2"
+        },
+        {
+          "command": "codexChatsList.delete",
+          "when": "view == codexChatsList.list && viewItem =~ /^(project|chat|pinnedProject|pinnedChat)(\\.hidden)?$/",
+          "group": "9_delete"
         }
       ],
       "commandPalette": [
@@ -206,6 +248,18 @@
         },
         {
           "command": "codexChatsList.unpin",
+          "when": "false"
+        },
+        {
+          "command": "codexChatsList.hide",
+          "when": "false"
+        },
+        {
+          "command": "codexChatsList.unhide",
+          "when": "false"
+        },
+        {
+          "command": "codexChatsList.delete",
           "when": "false"
         },
         {

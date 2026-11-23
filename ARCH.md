@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-  UI["VS Code 原生界面<br/>范围、分组、排序和置顶"]
+  UI["VS Code 原生界面<br/>浏览、置顶、隐藏和删除"]
   Host["工作区扩展宿主<br/>同步和本地查询"]
   Git["工作区 Git"]
   GitHub["GitHub 仓库元数据"]
@@ -10,12 +10,12 @@ flowchart LR
   Codex["官方 Codex 侧栏"]
   Prefs["工作区状态<br/>范围、排序和展开偏好"]
   Index["扩展全局存储<br/>共享会话索引"]
-  Pins["扩展全局存储<br/>项目与会话置顶"]
+  Preferences["扩展全局存储<br/>项目与会话偏好"]
   Repositories["扩展全局存储<br/>仓库身份缓存"]
   UI <-->|"操作和节点更新"| Host
-  Host <-->|"本地 stdio：thread/list"| Server
+  Host <-->|"本地 stdio：列表和确认后的删除"| Server
   Host <-->|"列表元数据和同步进度"| Index
-  Host <-->|"读写置顶标记"| Pins
+  Host <-->|"读写置顶和隐藏标记"| Preferences
   Git -->|"工作区根目录和已知检出"| Host
   GitHub -->|"仓库 ID 和规范名称"| Host
   Host <-->|"远程地址与仓库身份"| Repositories

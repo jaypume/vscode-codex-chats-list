@@ -29,7 +29,7 @@ export interface RepositoryPresentation {
   remote: string;
   checkout?: string;
   current: boolean;
-  pinAliases?: readonly string[];
+  preferenceAliases?: readonly string[];
 }
 
 function githubMetadata(value: unknown): GitHubIdentity | undefined {
@@ -277,14 +277,14 @@ export class RepositoryCatalog {
       const remote = chat.repository;
       if (!remote || result.has(remote)) continue;
       const key = groupKey(remote);
-      const pinAliases = aliases.get(key);
+      const preferenceAliases = aliases.get(key);
       const identity = identityFor(remote);
       result.set(remote, {
         key,
         remote: identity ? (names.get(identity.id)?.identity?.remote ?? identity.remote) : remote,
         current: current.has(key),
         checkout: current.get(key) ?? historical.get(key)?.root,
-        pinAliases: pinAliases ? [...pinAliases] : undefined,
+        preferenceAliases: preferenceAliases ? [...preferenceAliases] : undefined,
       });
     }
     return result;

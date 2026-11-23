@@ -43,7 +43,7 @@ test('a cached GitHub ID merges remote aliases, retains old pins, and prefers a 
     const view = repository.presentation(chats, workspace);
     expect(view.get(old)).toMatchObject({
       key: 'github:123', remote: current, current: true, checkout: '/workspace/wiki',
-      pinAliases: expect.arrayContaining([`remote:${old}`, `remote:${current}`]),
+      preferenceAliases: expect.arrayContaining([`remote:${old}`, `remote:${current}`]),
     });
     expect(repository.presentation(chats, new Map()).get(old)?.checkout).toBe(valid);
     expect(repository.presentation([chats[0]!], new Map()).get(old)?.checkout).toBeUndefined();

@@ -15,10 +15,11 @@ type ProjectNode = {
   filtered: boolean;
   expanded: boolean;
   pinned: boolean;
+  hidden: boolean;
 };
 export type TreeNode =
   | ProjectNode
-  | { kind: 'chat'; chat: Chat; filtered: boolean; pinned: boolean }
+  | { kind: 'chat'; chat: Chat; filtered: boolean; pinned: boolean; hidden: boolean }
   | { kind: 'more' };
 
 const t = createLocalizer(vscode.env.language);
@@ -42,7 +43,7 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
 
   constructor(
     private readonly state: vscode.Memento,
-    private readonly isChatPinned: (id: string) => boolean,
+    private readonly chatFlags: (id: string) => { pinned: boolean; hidden: boolean },
   ) {
     this.expansion = new Map(
       Object.entries(state.get<Record<string, boolean>>('projectExpansion', {})),
@@ -50,7 +51,7 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
   }
 
   update(
-    groups: (ProjectGroup & { pinned: boolean })[],
+    groups: (ProjectGroup & { pinned: boolean; hidden: boolean })[],
     scope: Scope,
     filtered: boolean,
     more: boolean,
@@ -64,6 +65,7 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       duplicate: (counts.get(group.name) ?? 0) > 1,
       filtered,
       pinned: group.pinned,
+      hidden: group.hidden,
       expanded:
         filtered || (this.expansion.get(group.key) ?? (scope === 'current' || group.current)),
     }));
@@ -94,7 +96,7 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
         kind: 'chat' as const,
         chat,
         filtered: node.filtered,
-        pinned: this.isChatPinned(chat.id),
+        ...this.chatFlags(chat.id),
       }))
       .sort((a, b) => Number(b.pinned) - Number(a.pinned));
   }
@@ -108,6 +110,7 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       return item;
     }
     const prefix = node.filtered ? 'filtered:' : '';
+    const hidden = node.hidden ? '.hidden' : '';
     if (node.kind === 'project') {
       const { group } = node;
       const item = new vscode.TreeItem(
@@ -117,8 +120,12 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
           : vscode.TreeItemCollapsibleState.Collapsed,
       );
       item.id = `${prefix}project:${group.key}`;
-      item.iconPath = node.pinned ? new vscode.ThemeIcon('pinned') : vscode.ThemeIcon.Folder;
-      item.contextValue = node.pinned ? 'pinnedProject' : 'project';
+      item.iconPath = node.hidden
+        ? new vscode.ThemeIcon('eye-closed')
+        : node.pinned
+          ? new vscode.ThemeIcon('pinned')
+          : vscode.ThemeIcon.Folder;
+      item.contextValue = (node.pinned ? 'pinnedProject' : 'project') + hidden;
       const count = t(group.chats.length === 1 ? 'chatsOne' : 'chatsOther', {
         count: group.chats.length,
       });
@@ -134,6 +141,7 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
         group.repository,
         group.cwd !== group.repository && group.cwd,
         node.pinned && t('pinnedLabel'),
+        node.hidden && t('hiddenLabel'),
       ]
         .filter(Boolean)
         .join('\n');
@@ -142,11 +150,12 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
     const { chat } = node;
     const item = new vscode.TreeItem(chat.title);
     item.id = `${prefix}chat:${chat.id}`;
-    item.contextValue = node.pinned ? 'pinnedChat' : 'chat';
+    item.contextValue = (node.pinned ? 'pinnedChat' : 'chat') + hidden;
     const time = relativeTime(chat.recencyAt);
     const opening = this.opening === chat.id;
     item.description = opening ? t('opening') : time;
     if (opening) item.iconPath = new vscode.ThemeIcon('loading~spin');
+    else if (node.hidden) item.iconPath = new vscode.ThemeIcon('eye-closed');
     else if (node.pinned) item.iconPath = new vscode.ThemeIcon('pinned');
     const date = new Date(chat.recencyAt * 1000);
     const timestamp =
@@ -158,11 +167,13 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       `${t('recentConversation')}: ${timestamp}`,
       `${t('path')}: ${chat.cwd}`,
       ...(node.pinned ? [t('pinnedLabel')] : []),
+      ...(node.hidden ? [t('hiddenLabel')] : []),
     ].join('\n');
     item.accessibilityInformation = {
       label: [
         t(opening ? 'openingLabel' : 'openLabel', { title: chat.title, time }),
         ...(node.pinned ? [t('pinnedLabel')] : []),
+        ...(node.hidden ? [t('hiddenLabel')] : []),
       ].join(', '),
     };
     item.command = {

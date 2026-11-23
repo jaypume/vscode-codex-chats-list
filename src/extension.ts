@@ -5,7 +5,7 @@ import path from 'node:path';
 import { CodexClient } from './client';
 import { findRepositories, inspectDirectory, type WorkspaceRepository } from './git';
 import { ConversationHistory, HEAD_REFRESH_MS } from './history';
-import { Pins } from './pins';
+import { ItemFlags } from './item-flags';
 import { RepositoryCatalog } from './repositories';
 import { openInCodex } from './routing';
 import {
@@ -57,7 +57,8 @@ async function workspaceRoots(): Promise<string[]> {
 
 class CodexChatsListView implements vscode.Disposable {
   readonly tree: ChatTree;
-  private readonly pins: Pins;
+  private readonly pins: ItemFlags;
+  private readonly hidden: ItemFlags;
   private readonly repositories: RepositoryCatalog;
   private view?: vscode.TreeView<TreeNode>;
   private history?: ConversationHistory;
@@ -66,6 +67,7 @@ class CodexChatsListView implements vscode.Disposable {
   private grouping: Grouping;
   private order: GroupOrder;
   private showFolders: boolean;
+  private hiddenOnly = false;
   private search = '';
   private chats: Chat[] = [];
   private complete = false;
@@ -82,6 +84,7 @@ class CodexChatsListView implements vscode.Disposable {
   private syncing = false;
   private forceRefresh = false;
   private opening: string | null = null;
+  private deleting = false;
   private error = '';
   private ready = false;
   private disposed = false;
@@ -98,9 +101,14 @@ class CodexChatsListView implements vscode.Disposable {
       : saved && saved !== 'repository' ? 'folder' : 'repository';
     this.showFolders = view?.showFolders !== false;
     this.order = view?.order === 'name' ? 'name' : 'recent';
-    this.pins = new Pins(context.globalStorageUri?.fsPath);
+    const storage = context.globalStorageUri?.fsPath;
+    this.pins = new ItemFlags(storage, 'pins-v1');
+    this.hidden = new ItemFlags(storage, 'hidden-v1');
     this.repositories = new RepositoryCatalog(context.globalStorageUri?.fsPath);
-    this.tree = new ChatTree(context.workspaceState, id => this.pins.has('chat', id));
+    this.tree = new ChatTree(context.workspaceState, id => ({
+      pinned: this.pins.has('chat', id),
+      hidden: this.hidden.has('chat', id),
+    }));
   }
 
   attach(view: vscode.TreeView<TreeNode>): void {
@@ -212,16 +220,77 @@ class CodexChatsListView implements vscode.Disposable {
     await this.saveView();
   }
 
-  async setPinned(node: TreeNode | undefined, pinned: boolean): Promise<void> {
+  async setFlag(node: TreeNode | undefined, flag: 'pinned' | 'hidden', enabled: boolean): Promise<void> {
     if (!node || node.kind === 'more' || this.disposed) return;
+    const store = flag === 'pinned' ? this.pins : this.hidden;
     try {
-      await this.pins.set(node.kind, node.kind === 'project' ? node.group.key : node.chat.id, pinned);
-      if (!pinned && node.kind === 'project') {
-        await Promise.all((node.group.pinAliases ?? []).map(key => this.pins.set('project', key, false)));
+      await store.set(node.kind, node.kind === 'project' ? node.group.key : node.chat.id, enabled);
+      if (!enabled && node.kind === 'project') {
+        await Promise.all((node.group.preferenceAliases ?? []).map(key => store.set('project', key, false)));
       }
       this.render();
     } catch {
-      void vscode.window.showErrorMessage(t('errorSavePin'));
+      void vscode.window.showErrorMessage(t(flag === 'pinned' ? 'errorSavePin' : 'errorSaveHidden'));
+    }
+  }
+
+  toggleHidden(): void {
+    if (this.disposed) return;
+    this.hiddenOnly = !this.hiddenOnly;
+    this.resetPage();
+  }
+
+  async deleteConversations(node: TreeNode | undefined): Promise<void> {
+    const history = this.history;
+    if (!node || node.kind === 'more' || !history || this.disposed || this.deleting) return;
+    if (node.kind === 'project' && !history.complete) {
+      void vscode.window.showInformationMessage(t('deleteWaitingForIndex'));
+      return;
+    }
+    const rows = history.rows();
+    const group = node.kind === 'project'
+      ? groupChats(rows, this.projects.roots, this.grouping, this.viewProjects(rows))
+        .find(item => item.key === node.group.key) : undefined;
+    const chats = node.kind === 'chat' ? rows.filter(chat => chat.id === node.chat.id) : group?.chats ?? [];
+    if (!chats.length) return;
+    const message = group ? t('deleteProjectPrompt', { name: group.name, count: chats.length })
+      : t('deleteChatPrompt', { title: chats[0]!.title });
+    const detail = (group ? [group.repository ?? group.cwd, t('deleteProjectDetail')] : [chats[0]!.cwd])
+      .concat(t('deleteDetail')).join('\n\n');
+    this.deleting = true;
+    try {
+      const cancel = { title: t('deleteCancel'), isCloseAffordance: true };
+      const button = { title: t('deleteConfirm') };
+      const confirm = await vscode.window.showWarningMessage(message, { modal: true, detail }, cancel, button);
+      if (confirm !== button || this.disposed || this.history !== history) return;
+      let deleted = 0;
+      let unsupported = false;
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('deleting') }, async progress => {
+        for (const chat of chats) {
+          if (this.disposed || this.history !== history) break;
+          try {
+            await history.deleteThread(chat);
+            deleted++;
+          } catch (error) {
+            if ((error as { code?: unknown } | null)?.code === -32601) {
+              unsupported = true;
+              break;
+            }
+          }
+          progress.report({ increment: 100 / chats.length });
+        }
+      });
+      if (this.disposed || this.history !== history) return;
+      this.readHistory();
+      this.render();
+      if (unsupported) void vscode.window.showErrorMessage(t('deleteUnsupported'));
+      else if (deleted < chats.length) {
+        void vscode.window.showWarningMessage(t('deletePartial', { deleted, failed: chats.length - deleted }));
+      } else {
+        void vscode.window.showInformationMessage(t('deleteDone', { count: deleted }));
+      }
+    } finally {
+      this.deleting = false;
     }
   }
 
@@ -314,7 +383,8 @@ class CodexChatsListView implements vscode.Disposable {
     this.ready = true;
     if (changed) this.render();
     try {
-      if (await this.pins.reload().catch(() => false) && current()) this.render();
+      const flags = await Promise.all([this.pins, this.hidden].map(store => store.reload().catch(() => false)));
+      if (flags.some(Boolean) && current()) this.render();
       if (!current()) return;
       if (!this.history) {
         const binary = await getBinary();
@@ -401,33 +471,47 @@ class CodexChatsListView implements vscode.Disposable {
     if (!this.view || !this.ready || this.disposed) return;
     const info = [t(this.scope), t(this.grouping)];
     if (!this.showFolders) info.push(t('foldersHidden'));
+    if (this.hiddenOnly) info.push(t('hiddenOnly'));
     if (this.search) info.push(t('activeSearch', { query: this.search }));
-    const projects = this.grouping === 'repository' ? {
-      ...this.projects,
-      repositoryView: this.repositories.presentation(this.chats, this.workspaceRepositories),
-    } : this.projects;
+    const projects = this.viewProjects();
     const selected = selectChats(this.chats, projects, this.scope, this.grouping, this.showFolders, this.search);
     const order = this.scope === 'all' ? this.order : undefined;
-    const groups = groupChats(selected, projects.roots, this.grouping, projects, order);
-    const page = this.scope === 'current' && selected.length > this.limit
-      ? new Set(selected.slice(0, this.limit)) : undefined;
-    const visible = groups.flatMap(group => {
-      const pinned = this.pins.has('project', group.key) || Boolean(group.pinAliases?.some(key => this.pins.has('project', key)));
-      const chats = page ? group.chats.filter((chat, i) => page.has(chat)
-        || (pinned && i === 0) || this.pins.has('chat', chat.id)) : group.chats;
-      return chats.length ? [{ ...group, chats, pinned }] : [];
+    const groups = groupChats(selected, projects.roots, this.grouping, projects, order).flatMap(group => {
+      const hidden = this.hidden.has('project', group.key, group.preferenceAliases);
+      const chats = hidden ? (this.hiddenOnly ? group.chats : [])
+        : group.chats.filter(chat => this.hidden.has('chat', chat.id) === this.hiddenOnly);
+      const pinned = this.pins.has('project', group.key, group.preferenceAliases);
+      return chats.length ? [{ ...group, chats, pinned, hidden }] : [];
     });
+    const eligibleCount = groups.reduce((sum, group) => sum + group.chats.length, 0);
+    let visible = groups;
+    if (this.scope === 'current' && eligibleCount > this.limit) {
+      const eligible = new Set(groups.flatMap(group => group.chats));
+      const page = new Set(selected.filter(chat => eligible.has(chat)).slice(0, this.limit));
+      visible = groups.flatMap(group => {
+        const chats = group.chats.filter((chat, i) => page.has(chat)
+          || (group.pinned && i === 0) || this.pins.has('chat', chat.id));
+        return chats.length ? [{ ...group, chats }] : [];
+      });
+    }
     const count = visible.reduce((sum, group) => sum + group.chats.length, 0);
     this.view.badge = count ? { value: count, tooltip: t(count === 1 ? 'loadedOne' : 'loadedOther', { count }) } : undefined;
     if (this.error) this.view.message = this.error;
     else if (this.scope === 'current' && !this.projects.roots.length) this.view.message = undefined;
     else {
       if (!this.complete) info.push(t('indexing'));
-      else if (!count) info.push(t(this.search ? 'emptySearchTitle' : this.scope === 'current' ? 'emptyCurrentDetail' : 'emptyAllDetail'));
+      else if (!count) info.push(t(this.hiddenOnly ? 'emptyHidden' : this.search ? 'emptySearchTitle' : this.scope === 'current' ? 'emptyCurrentDetail' : 'emptyAllDetail'));
       this.view.message = info.join(' · ');
     }
 
-    this.tree.update(visible, this.scope, Boolean(this.search), selected.length > count, this.opening);
+    this.tree.update(visible, this.scope, Boolean(this.search) || this.hiddenOnly, eligibleCount > count, this.opening);
+  }
+
+  private viewProjects(chats = this.chats): WorkspaceProjects {
+    return this.grouping === 'repository' ? {
+      ...this.projects,
+      repositoryView: this.repositories.presentation(chats, this.workspaceRepositories),
+    } : this.projects;
   }
 
   /** Metadata-free diagnostics used by the isolated extension-host smoke test. */
@@ -461,8 +545,12 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('codexChatsList.selectScope', () => provider.pickScope()),
     vscode.commands.registerCommand('codexChatsList.selectGrouping', () => provider.pickGrouping()),
     vscode.commands.registerCommand('codexChatsList.sortProjects', () => provider.pickOrder()),
-    vscode.commands.registerCommand('codexChatsList.pin', (node?: TreeNode) => provider.setPinned(node, true)),
-    vscode.commands.registerCommand('codexChatsList.unpin', (node?: TreeNode) => provider.setPinned(node, false)),
+    vscode.commands.registerCommand('codexChatsList.pin', (node?: TreeNode) => provider.setFlag(node, 'pinned', true)),
+    vscode.commands.registerCommand('codexChatsList.unpin', (node?: TreeNode) => provider.setFlag(node, 'pinned', false)),
+    vscode.commands.registerCommand('codexChatsList.hide', (node?: TreeNode) => provider.setFlag(node, 'hidden', true)),
+    vscode.commands.registerCommand('codexChatsList.unhide', (node?: TreeNode) => provider.setFlag(node, 'hidden', false)),
+    vscode.commands.registerCommand('codexChatsList.toggleHidden', () => provider.toggleHidden()),
+    vscode.commands.registerCommand('codexChatsList.delete', (node?: TreeNode) => provider.deleteConversations(node)),
     vscode.commands.registerCommand('codexChatsList.toggleFolders', () => provider.toggleFolders()),
     vscode.commands.registerCommand('codexChatsList.showAll', () => provider.setScope('all')),
     vscode.commands.registerCommand('codexChatsList.search', () => provider.promptSearch()),

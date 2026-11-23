@@ -8,12 +8,14 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn<(roots: string[] | undefined, search: string, cursor: string | null) => Promise<ChatPage>>(),
   inspectDirectory: vi.fn<(cwd: string) => Promise<Directory>>(),
   checkThread: vi.fn<(id: string) => Promise<Chat | undefined>>(),
+  deleteThread: vi.fn<(id: string) => Promise<void>>(),
   findRepositories: vi.fn<(roots: string[]) => Promise<Map<string, WorkspaceRepository>>>(),
   dispose: vi.fn(),
   construct: vi.fn(),
   createTree: vi.fn<(id: string, options: vscode.TreeViewOptions<TreeNode>) => vscode.TreeView<TreeNode>>(),
   registerCommand: vi.fn<(id: string, handler: (...args: unknown[]) => unknown) => vscode.Disposable>(),
   executeCommand: vi.fn(),
+  showWarning: vi.fn<(message: string, options?: vscode.MessageOptions, cancel?: vscode.MessageItem, confirm?: vscode.MessageItem) => Promise<vscode.MessageItem | undefined>>(),
   openConversation: vi.fn(),
   promptScope: vi.fn<(items: { value: Scope | Grouping | GroupOrder }[]) => Promise<{ value: Scope | Grouping | GroupOrder } | undefined>>(),
   promptSearch: vi.fn<(options: vscode.InputBoxOptions) => Promise<string | undefined>>(),
@@ -27,6 +29,7 @@ vi.mock('../src/client', () => ({ CodexClient: class {
   list = mocks.list;
   async historySource() { return '/fixture/codex-home'; }
   checkThread = mocks.checkThread;
+  deleteThread = mocks.deleteThread;
   dispose = mocks.dispose;
 } }));
 vi.mock('../src/routing', () => ({ openInCodex: mocks.openConversation }));
@@ -53,8 +56,10 @@ vi.mock('vscode', () => ({
     showInputBox: mocks.promptSearch,
     showQuickPick: mocks.promptScope,
     showInformationMessage: vi.fn(),
-    withProgress: (_options: unknown, task: () => Promise<void>) => task(),
+    showWarningMessage: mocks.showWarning,
+    withProgress: (_options: unknown, task: (progress: vscode.Progress<unknown>) => Promise<void>) => task({ report() {} }),
   },
+  ProgressLocation: { Notification: 15 },
   commands: { registerCommand: mocks.registerCommand, executeCommand: mocks.executeCommand },
   EventEmitter: class<T> {
     private readonly signal = new Signal<T>();
@@ -152,6 +157,8 @@ beforeEach(() => {
   mocks.list.mockReset().mockResolvedValue(page('thread-default'));
   mocks.inspectDirectory.mockReset().mockResolvedValue({ kind: 'folder' });
   mocks.checkThread.mockReset().mockImplementation(async id => page(id).chats[0]);
+  mocks.deleteThread.mockReset().mockResolvedValue(undefined);
+  mocks.showWarning.mockReset().mockResolvedValue(undefined);
   mocks.findRepositories.mockReset().mockResolvedValue(new Map());
   mocks.realpath.mockReset().mockImplementation(async value => value);
   mocks.registerCommand.mockReturnValue({ dispose() {} });
@@ -169,6 +176,7 @@ test('all commands use the fork namespace and open focuses the fork view', async
   expect(mocks.registerCommand.mock.calls.map(([id]) => id)).toEqual([
     'codexChatsList.open', 'codexChatsList.refresh', 'codexChatsList.selectScope',
     'codexChatsList.selectGrouping', 'codexChatsList.sortProjects', 'codexChatsList.pin', 'codexChatsList.unpin',
+    'codexChatsList.hide', 'codexChatsList.unhide', 'codexChatsList.toggleHidden', 'codexChatsList.delete',
     'codexChatsList.toggleFolders', 'codexChatsList.showAll',
     'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.loadMore', 'codexChatsList.openConversation',
   ]);
@@ -288,6 +296,88 @@ test('local pagination preserves cached results without touching the Codex conne
   await fixture.run('loadMore');
   expect(fixture.view.badge?.value).toBe(60);
   expect(mocks.list).toHaveBeenCalledOnce();
+});
+
+test('hidden items can be filtered and restored without changing their pins or opening Codex', async () => {
+  mocks.list.mockResolvedValueOnce({
+    chats: ['thread-first', 'thread-second'].map(id => page(id).chats[0]!),
+    nextCursor: null,
+  });
+  const fixture = await setup();
+  await fixture.ready();
+  const root = () => fixture.tree.getChildren()[0]!;
+  const children = () => fixture.tree.getChildren(root());
+  const label = (node: TreeNode) => fixture.tree.getTreeItem(node).label;
+  const first = children()[0]!;
+  await fixture.run('pin', first);
+  await fixture.run('hide', first);
+  expect(children().map(label)).toEqual(['thread-second']);
+  await fixture.run('toggleHidden');
+  expect(children().map(label)).toEqual(['thread-first']);
+  expect(fixture.tree.getTreeItem(children()[0]!)).toMatchObject({ contextValue: 'pinnedChat.hidden' });
+  await fixture.run('hide', root());
+  expect(children().map(label)).toEqual(['thread-first', 'thread-second']);
+  expect(fixture.tree.getTreeItem(root())).toMatchObject({ contextValue: 'project.hidden' });
+  await fixture.run('toggleHidden');
+  expect(fixture.tree.getChildren()).toHaveLength(0);
+  await fixture.run('toggleHidden');
+  await fixture.run('unhide', root());
+  expect(children().map(label)).toEqual(['thread-first']);
+  await fixture.run('unhide', children()[0]);
+  expect(fixture.tree.getChildren()).toHaveLength(0);
+  await fixture.run('toggleHidden');
+  expect(children().map(label)).toEqual(['thread-first', 'thread-second']);
+  expect(fixture.tree.getTreeItem(children()[0]!)).toMatchObject({ contextValue: 'pinnedChat' });
+  expect(mocks.list).toHaveBeenCalledOnce();
+});
+
+test('deleting an individual conversation requires modal confirmation and changes only that row', async () => {
+  mocks.list.mockResolvedValueOnce({
+    chats: ['thread-keep', 'thread-remove'].map(id => page(id).chats[0]!),
+    nextCursor: null,
+  });
+  const fixture = await setup();
+  await fixture.ready();
+  const children = () => fixture.tree.getChildren(fixture.tree.getChildren()[0]);
+  const thread = children()[1];
+  await fixture.run('delete', thread);
+  expect(mocks.showWarning).toHaveBeenLastCalledWith(
+    expect.stringContaining('thread-remove'), expect.objectContaining({ modal: true }),
+    { title: 'Cancel', isCloseAffordance: true }, { title: 'Delete Permanently' },
+  );
+  expect(mocks.deleteThread).not.toHaveBeenCalled();
+  mocks.showWarning.mockImplementationOnce(async (_message, _options, _cancel, confirm) => confirm);
+  await fixture.run('delete', thread);
+  expect(mocks.deleteThread).toHaveBeenCalledExactlyOnceWith('thread-remove');
+  expect(children().map(node => fixture.tree.getTreeItem(node).label)).toEqual(['thread-keep']);
+});
+
+test('repository deletion covers hidden and filtered conversations and leaves failed and unrelated rows', async () => {
+  const repository = 'github.com/example/app';
+  const chats = Array.from({ length: 52 }, (_, n) => ({
+    id: 'thread-' + n, title: n === 51 ? 'match' : 'other', recencyAt: n + 1, cwd: '/fixture', repository,
+  }));
+  const unrelated = { id: 'thread-unrelated', title: 'Unrelated', cwd: '/other', recencyAt: 1, repository: 'github.com/other/app' };
+  mocks.list.mockResolvedValueOnce({ chats: [...chats, unrelated], nextCursor: null });
+  mocks.deleteThread.mockImplementation(async id => {
+    if (id === 'thread-0') throw new Error('fixture failure');
+  });
+  const fixture = await setup();
+  await fixture.ready();
+  await fixture.pick('all');
+  const root = () => fixture.tree.getChildren()[0]!;
+  await fixture.run('hide', fixture.tree.getChildren(root())[1]);
+  await fixture.search('match');
+  expect(fixture.view.badge?.value).toBe(1);
+  mocks.showWarning.mockImplementationOnce(async (_message, _options, _cancel, confirm) => confirm);
+  await fixture.run('delete', root());
+  expect(mocks.showWarning.mock.calls[0]?.[0]).toContain('52 conversations');
+  expect(mocks.deleteThread.mock.calls.map(([id]) => id)).toEqual(chats.map(chat => chat.id).reverse());
+  expect(mocks.showWarning.mock.calls.at(-1)?.[0]).toBe('Deleted 51 conversations. Could not delete 1.');
+  await fixture.run('clearSearch');
+  expect(fixture.api.snapshot().count).toBe(2);
+  const remaining = fixture.tree.getChildren().flatMap(node => fixture.tree.getChildren(node));
+  expect(remaining.map(node => fixture.tree.getTreeItem(node).label)).toEqual(['other', 'Unrelated']);
 });
 
 test('All lists every cached repository and chat, sorts groups, and pins without requerying Codex', async () => {

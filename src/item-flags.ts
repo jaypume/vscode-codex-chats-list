@@ -2,24 +2,27 @@ import { createHash } from 'node:crypto';
 import { mkdir, open, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
-type PinKind = 'project' | 'chat';
+type ItemKind = 'project' | 'chat';
 
-function pinKey(kind: PinKind, id: string): string {
+function itemKey(kind: ItemKind, id: string): string {
   return `${kind}-${createHash('sha256').update(id).digest('hex')}`;
 }
 
-/** Keep user preferences independent of the rebuildable history index. */
-export class Pins {
+/** Keep per-item preferences independent of the rebuildable history index. */
+export class ItemFlags {
   private readonly directory?: string;
   private keys = new Set<string>();
   private revision = 0;
 
-  constructor(storage?: string) {
-    if (storage) this.directory = path.join(storage, 'pins-v1');
+  constructor(storage: string | undefined, bucket: 'pins-v1' | 'hidden-v1') {
+    if (storage) this.directory = path.join(storage, bucket);
   }
 
-  has(kind: PinKind, id: string): boolean {
-    return this.keys.size > 0 && this.keys.has(pinKey(kind, id));
+  has(kind: ItemKind, id: string, aliases: readonly string[] = []): boolean {
+    return (
+      this.keys.size > 0 &&
+      (this.keys.has(itemKey(kind, id)) || aliases.some((key) => this.keys.has(itemKey(kind, key))))
+    );
   }
 
   async reload(): Promise<boolean> {
@@ -36,11 +39,11 @@ export class Pins {
     return changed;
   }
 
-  async set(kind: PinKind, id: string, pinned: boolean): Promise<void> {
-    const key = pinKey(kind, id);
+  async set(kind: ItemKind, id: string, enabled: boolean): Promise<void> {
+    const key = itemKey(kind, id);
     if (this.directory) {
       const file = path.join(this.directory, key);
-      if (pinned) {
+      if (enabled) {
         await mkdir(this.directory, { recursive: true, mode: 0o700 });
         const marker = await open(file, 'a', 0o600);
         await marker.close();
@@ -49,7 +52,7 @@ export class Pins {
       }
     }
     this.revision++;
-    if (pinned) this.keys.add(key);
+    if (enabled) this.keys.add(key);
     else this.keys.delete(key);
   }
 }

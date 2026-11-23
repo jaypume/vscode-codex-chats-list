@@ -130,6 +130,13 @@ export class CodexClient {
     }
   }
 
+  async deleteThread(id: string): Promise<void> {
+    await this.start();
+    if (!isRecord(await this.request('thread/delete', { threadId: id }))) {
+      throw new Error(this.t('errorInvalidResponse'));
+    }
+  }
+
   private fail(error: Error): void {
     for (const item of this.pending.values()) { clearTimeout(item.timer); item.reject(error); }
     this.pending.clear();

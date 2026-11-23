@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.0
+
+### Added
+
+- Hide and restore project groups and conversations, with a hidden-items filter.
+- Permanently delete a conversation or a project's indexed conversations after confirmation.
+
 ## 1.6.0
 
 ### Added

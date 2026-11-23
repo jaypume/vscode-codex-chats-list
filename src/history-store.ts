@@ -49,7 +49,9 @@ class MemoryStore implements HistoryStore {
 
   release(token: string) { if (this.token === token) this.token = undefined; }
   update(chat: Chat, observedAt: number, available: boolean) {
-    if ((this.records.get(chat.id)?.observedAt ?? 0) <= observedAt) {
+    const previous = this.records.get(chat.id);
+    if (!previous || observedAt > previous.observedAt
+      || (observedAt === previous.observedAt && (!available || previous.available))) {
       this.records.set(chat.id, { chat, observedAt, available });
     }
   }
@@ -167,7 +169,8 @@ class SqliteStore implements HistoryStore {
         title = excluded.title, cwd = excluded.cwd, recency_at = excluded.recency_at,
         repository = excluded.repository, has_git = excluded.has_git, directory = excluded.directory,
         observed_at = excluded.observed_at, available = excluded.available
-      WHERE excluded.observed_at >= history_thread.observed_at
+      WHERE excluded.observed_at > history_thread.observed_at
+        OR (excluded.observed_at = history_thread.observed_at AND excluded.available <= history_thread.available)
     `);
   }
 

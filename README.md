@@ -21,6 +21,8 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 | See details | Each row shows the latest conversation time. Hover over a conversation for its full title, time, and project path. |
 | Sort all projects | In **All projects**, open the view's **…** menu and choose **Sort Projects**. Sort by name or by the most recent conversation. |
 | Pin a project or conversation | Right-click a project group or conversation and choose **Pin** or **Unpin**. Pinned groups come first. Pinned conversations come first within their group. |
+| Hide or restore items | Right-click a project group or conversation and choose **Hide**. Use **… → Toggle Hidden Items View** to find hidden items and right-click **Unhide** to restore them. |
+| Delete conversations | Right-click a conversation or project group and choose **Delete Conversations…**. Confirm permanent deletion in Codex. Project deletion covers the group's indexed conversations, including those outside the current view filters and page. |
 | Load and refresh | **All projects** shows every indexed group and conversation. In **Current project**, use **Load more conversations** when available. **Refresh Conversations** checks recent activity. |
 
 With **By Repository**, the current scope matches either the workspace repository’s `origin` or `upstream`. A matching remote also finds conversations from moved checkouts. Local repositories with no remote group under their Git root.
@@ -33,7 +35,7 @@ The first scan indexes history in the background. Results appear as pages become
 
 The index stores listing metadata, including sanitized repository keys. Selecting a cached conversation checks its metadata with Codex before opening. Renames or archives outside the recently checked activity may appear stale until that conversation is selected. Hosts without Node SQLite use an in-memory index.
 
-The sort order is saved per workspace. Pins are shared by windows on the same VS Code profile and extension host.
+The sort order is saved per workspace. Pins and hidden items are shared by windows on the same VS Code profile and extension host.
 
 ## Preview
 

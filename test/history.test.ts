@@ -53,6 +53,8 @@ test('a scan started before archiving cannot restore the cached row', async () =
     store.update(thread, 20, false);
     expect(store.commit('scan', [thread], 10)).toBe(true);
     expect(store.rows()).toEqual([]);
+    expect(store.commit('scan', [thread], 20)).toBe(true);
+    expect(store.rows()).toEqual([]);
     store.update(thread, 30, true);
     expect(store.rows()).toEqual([thread]);
   } finally { store.close(); await rm(folder, { recursive: true, force: true }); }
