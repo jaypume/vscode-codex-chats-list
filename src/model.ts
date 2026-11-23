@@ -85,11 +85,31 @@ export function selectChats(
   chats: Chat[], workspace: WorkspaceProjects, scope: Scope, grouping: Grouping, showFolders: boolean, search: string,
 ): Chat[] {
   const roots = new Set(workspace.roots.map(pathKey));
-  return chats.filter(chat =>
+  const selected = chats.filter(chat =>
     (scope === 'all' || inWorkspace(chat, roots, workspace, grouping))
-    && (showFolders || chat.repository || chat.hasGit || chat.directory?.kind !== 'folder')
-    && (!search || chat.title.includes(search)))
+    && (showFolders || chat.repository || chat.hasGit || chat.directory?.kind !== 'folder'));
+  return filterTitles(selected, search)
     .sort((a, b) => b.recencyAt - a.recencyAt || a.id.localeCompare(b.id));
+}
+
+const searchableTitles = new WeakMap<Chat, string>();
+
+function searchText(value: string): string {
+  return value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Keep the existing result order and reuse normalized titles across keystrokes. */
+export function filterTitles(chats: Chat[], search: string): Chat[] {
+  const query = searchText(search);
+  if (!query) return chats;
+  return chats.filter(chat => {
+    let title = searchableTitles.get(chat);
+    if (title === undefined) {
+      title = searchText(chat.title);
+      searchableTitles.set(chat, title);
+    }
+    return title.includes(query);
+  });
 }
 
 /** Group before rendering and disambiguate projects with the same folder basename. */

@@ -17,7 +17,7 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 | --- | --- |
 | Choose the scope | Use **Change Conversation Scope** in the view toolbar to select **Current project** or **All projects**. |
 | Group and filter | Use **Group Conversations** to select **By Repository** or **By Folder**. The view menu has **Toggle Non-Git Folders**. |
-| Filter by title | Use **Search Conversation Titles**, enter a keyword, and press Enter. Results stay grouped in the tree. Use **Clear Conversation Search** or submit an empty search to reset the filter. |
+| Search titles | Select the magnifier and type a title keyword. The tree updates within the selected scope, **Current project** or **All projects**. Enter keeps the filter and Escape restores the previous results. Use **Clear Conversation Search** to reset it. |
 | See details | Each row shows the latest conversation time. Hover over a conversation for its full title, time, and project path. |
 | Sort all projects | In **All projects**, open the view's **…** menu and choose **Sort Projects**. Sort by name or by the most recent conversation. |
 | Pin a project or conversation | Right-click a project group or conversation and choose **Pin** or **Unpin**. Pinned groups come first. Pinned conversations come first within their group. |

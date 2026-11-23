@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   showWarning: vi.fn<(message: string, options?: vscode.MessageOptions, cancel?: vscode.MessageItem, confirm?: vscode.MessageItem) => Promise<vscode.MessageItem | undefined>>(),
   openConversation: vi.fn(),
   promptScope: vi.fn<(items: { value: Scope | Grouping | GroupOrder }[]) => Promise<{ value: Scope | Grouping | GroupOrder } | undefined>>(),
-  promptSearch: vi.fn<(options: vscode.InputBoxOptions) => Promise<string | undefined>>(),
+  createInputBox: vi.fn<() => TestInputBox>(),
   realpath: vi.fn<(path: string) => Promise<string>>(),
   updateScope: vi.fn<(key: string, value: unknown) => Promise<void>>(),
   cliPath: undefined as string | undefined,
@@ -53,7 +53,7 @@ vi.mock('vscode', () => ({
   },
   window: {
     createTreeView: mocks.createTree,
-    showInputBox: mocks.promptSearch,
+    createInputBox: mocks.createInputBox,
     showQuickPick: mocks.promptScope,
     showInformationMessage: vi.fn(),
     showWarningMessage: mocks.showWarning,
@@ -86,6 +86,22 @@ class Signal<T> {
   };
   fire(value: T) { for (const listener of this.listeners) listener(value); }
   clear() { this.listeners.clear(); }
+}
+
+class TestInputBox {
+  private readonly changed = new Signal<string>();
+  private readonly accepted = new Signal<void>();
+  private readonly hidden = new Signal<void>();
+  readonly onDidChangeValue = this.changed.listen;
+  readonly onDidAccept = this.accepted.listen;
+  readonly onDidHide = this.hidden.listen;
+  value = '';
+  title = '';
+  type(value: string) { this.value = value; this.changed.fire(value); }
+  accept() { this.accepted.fire(); }
+  hide() { this.hidden.fire(); }
+  show() {}
+  dispose() {}
 }
 
 const disposables: vscode.Disposable[] = [];
@@ -134,9 +150,16 @@ async function setup(saved?: Scope | 'repository') {
     setVisible(true);
     await vi.advanceTimersByTimeAsync(0);
   };
-  const search = (value: string | undefined) => {
-    mocks.promptSearch.mockResolvedValueOnce(value);
-    return run('search');
+  const beginSearch = async () => {
+    const done = run('search');
+    await Promise.resolve();
+    return { input: mocks.createInputBox.mock.results.at(-1)!.value, done };
+  };
+  const search = async (value: string | undefined) => {
+    const { input, done } = await beginSearch();
+    if (value === undefined) input.hide();
+    else { input.type(value); input.accept(); }
+    await done;
   };
   const pick = (value: Scope) => {
     mocks.promptScope.mockResolvedValueOnce({ value });
@@ -147,7 +170,7 @@ async function setup(saved?: Scope | 'repository') {
     return run('selectGrouping');
   };
   const dispose = () => disposables[0]?.dispose();
-  return { api, view, tree, rendered, ready, setVisible, run, search, pick, group, dispose, collapsed };
+  return { api, view, tree, rendered, ready, setVisible, run, search, beginSearch, pick, group, dispose, collapsed };
 }
 
 beforeEach(() => {
@@ -161,6 +184,7 @@ beforeEach(() => {
   mocks.showWarning.mockReset().mockResolvedValue(undefined);
   mocks.findRepositories.mockReset().mockResolvedValue(new Map());
   mocks.realpath.mockReset().mockImplementation(async value => value);
+  mocks.createInputBox.mockImplementation(() => new TestInputBox());
   mocks.registerCommand.mockReturnValue({ dispose() {} });
   mocks.updateScope.mockReset().mockResolvedValue(undefined);
   mocks.cliPath = undefined;
@@ -405,6 +429,11 @@ test('All lists every cached repository and chat, sorts groups, and pins without
   expect(title(noise)).toBe('noise');
   expect(fixture.tree.getChildren(noise)).toHaveLength(60);
   expect(title(roots().at(-1)!)).toBe('alpha');
+  await fixture.search('noise');
+  expect(roots()).toHaveLength(1);
+  expect(fixture.tree.getTreeItem(roots()[0]!)).toMatchObject({ collapsibleState: 1 });
+  expect(fixture.tree.getChildren(roots()[0]!)).toHaveLength(60);
+  await fixture.run('clearSearch');
   mocks.promptScope.mockResolvedValueOnce({ value: 'name' });
   await fixture.run('sortProjects');
   const [alpha, beta] = roots();
@@ -458,6 +487,46 @@ test('uses stable node identity and isolates search expansion from the saved tre
   expect(fixture.tree.getTreeItem(fixture.tree.getChildren()[0]!)).toMatchObject({
     id: 'project:/fixture', collapsibleState: 1,
   });
+});
+
+test('title search debounces live matches, restores on Escape, and follows Current and All', async () => {
+  const repository = 'github.com/example/app';
+  mocks.findRepositories.mockResolvedValue(new Map([[repository, { key: repository, root: '/fixture' }]]));
+  mocks.list.mockResolvedValueOnce({
+    chats: [
+      { id: 'thread-moved', title: '修复 ＡＰＩ 接口', cwd: '/old/app', recencyAt: 3, repository },
+      { id: 'thread-other', title: 'Api guide', cwd: '/other', recencyAt: 2, repository: 'github.com/else/other' },
+      { id: 'thread-path', title: 'Planning', cwd: '/fixture/API', recencyAt: 1, repository },
+    ],
+    nextCursor: null,
+  });
+  const fixture = await setup();
+  await fixture.ready();
+  const ids = () => fixture.tree.getChildren().flatMap(node =>
+    node.kind === 'project' ? node.group.chats.map(chat => chat.id) : []);
+  const draft = await fixture.beginSearch();
+  expect(draft.input.title).toContain('Current project');
+  const calls = fixture.rendered.mock.calls.length;
+  draft.input.type('A');
+  draft.input.type('aPi');
+  await vi.advanceTimersByTimeAsync(119);
+  expect(fixture.rendered).toHaveBeenCalledTimes(calls);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(ids()).toEqual(['thread-moved']);
+  draft.input.hide();
+  await draft.done;
+  expect(ids()).toEqual(['thread-moved', 'thread-path']);
+  await fixture.search('aPi');
+  expect(ids()).toEqual(['thread-moved']);
+  await fixture.pick('all');
+  expect(ids()).toEqual(['thread-moved', 'thread-other']);
+  const all = await fixture.beginSearch();
+  expect(all.input.title).toContain('All projects');
+  all.input.type('');
+  all.input.accept();
+  await all.done;
+  expect(ids()).toHaveLength(3);
+  expect(mocks.list).toHaveBeenCalledExactlyOnceWith(undefined, '', null);
 });
 
 test('validates the selected ID before navigating and removes a confirmed archived entry', async () => {

@@ -7,6 +7,7 @@ import { createTimeFormatter } from './time';
 export const VIEW_ID = 'codexChatsList.list';
 export const OPEN_CONVERSATION = 'codexChatsList.openConversation';
 export const LOAD_MORE = 'codexChatsList.loadMore';
+const AUTO_EXPAND_LIMIT = 50;
 
 type ProjectNode = {
   kind: 'project';
@@ -59,6 +60,9 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
   ): void {
     const counts = new Map<string, number>();
     for (const group of groups) counts.set(group.name, (counts.get(group.name) ?? 0) + 1);
+    const expandFiltered =
+      filtered &&
+      groups.reduce((count, group) => count + group.chats.length, 0) <= AUTO_EXPAND_LIMIT;
     this.nodes = groups.map((group) => ({
       kind: 'project',
       group,
@@ -66,8 +70,9 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       filtered,
       pinned: group.pinned,
       hidden: group.hidden,
-      expanded:
-        filtered || (this.expansion.get(group.key) ?? (scope === 'current' || group.current)),
+      expanded: filtered
+        ? expandFiltered
+        : (this.expansion.get(group.key) ?? (scope === 'current' || group.current)),
     }));
     this.nodes.sort(
       (a, b) => Number(b.kind === 'project' && b.pinned) - Number(a.kind === 'project' && a.pinned),

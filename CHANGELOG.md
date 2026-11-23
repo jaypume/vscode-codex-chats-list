@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.0
+
+### Changed
+
+- Preview title matches as you type in the selected scope. Press Enter to keep the filter or Escape to restore the previous results.
+- Reuse scoped candidates and normalized titles for local search, and keep groups collapsed when there are many matches.
+
 ## 1.7.0
 
 ### Added
