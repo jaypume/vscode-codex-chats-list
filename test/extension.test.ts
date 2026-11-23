@@ -132,8 +132,11 @@ async function setup(saved?: Scope | 'repository') {
   const visibility = new Signal<void>();
   const expanded = new Signal<{ element: TreeNode }>();
   const collapsed = new Signal<{ element: TreeNode }>();
+  const badgeUpdates: (vscode.ViewBadge | undefined)[] = [];
   const view = {
     visible: false,
+    get badge() { return badgeUpdates.at(-1); },
+    set badge(badge: vscode.ViewBadge | undefined) { badgeUpdates.push(badge); },
     onDidChangeVisibility: visibility.listen,
     onDidExpandElement: expanded.listen,
     onDidCollapseElement: collapsed.listen,
@@ -186,7 +189,7 @@ async function setup(saved?: Scope | 'repository') {
     return run('selectGrouping');
   };
   const dispose = () => disposables[0]?.dispose();
-  return { api, view, tree, rendered, ready, setVisible, run, search, beginSearch, pick, group, dispose, collapsed };
+  return { api, view, tree, rendered, ready, setVisible, run, search, beginSearch, pick, group, dispose, collapsed, badgeUpdates };
 }
 
 beforeEach(() => {
@@ -485,7 +488,7 @@ test('All lists every cached repository and chat, sorts groups, and pins without
   expect(roots()).toHaveLength(58);
   expect(roots().every(node => node.kind === 'project')).toBe(true);
   expect(roots().flatMap(node => fixture.tree.getChildren(node))).toHaveLength(163);
-  expect(fixture.view.badge).toBeUndefined();
+  expect(fixture.badgeUpdates).toEqual([{ value: 0, tooltip: '' }, undefined]);
   const noise = roots()[0]!;
   expect(title(noise)).toBe('noise');
   expect(fixture.tree.getChildren(noise)).toHaveLength(105);

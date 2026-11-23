@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.2
+
+### Fixed
+
+- Clear conversation count badges left in the Activity Bar after upgrading in an open window.
+
 ## 1.13.1
 
 ### Changed

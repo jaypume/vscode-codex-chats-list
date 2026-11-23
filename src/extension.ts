@@ -703,6 +703,10 @@ class CodexChatsListView implements vscode.Disposable {
 export function activate(context: vscode.ExtensionContext) {
   const provider = new CodexChatsListView(context);
   const view = vscode.window.createTreeView(VIEW_ID, { treeDataProvider: provider.tree, showCollapseAll: true });
+  // The workbench can retain a previous badge across extension host restarts.
+  // Set a hidden zero first so the host forwards the subsequent clear.
+  view.badge = { value: 0, tooltip: '' };
+  view.badge = undefined;
   context.subscriptions.push(provider,
     view,
     vscode.window.registerFileDecorationProvider(provider.tree),
