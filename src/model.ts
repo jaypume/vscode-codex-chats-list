@@ -18,6 +18,8 @@ export interface ChatPage { chats: Chat[]; nextCursor: string | null }
 export interface ProjectGroup { key: string; name: string; cwd: string; current: boolean; unknown?: boolean; chats: Chat[] }
 export type Scope = 'current' | 'all';
 export type Grouping = 'folder' | 'repository';
+export type GroupOrder = 'recent' | 'name';
+const byGroupName = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
 export interface WorkspaceProjects {
   roots: string[];
@@ -82,6 +84,7 @@ export function selectChats(
 /** Group before rendering and disambiguate projects with the same folder basename. */
 export function groupChats(chats: Chat[], roots: string[], grouping: Grouping = 'folder',
   workspace: WorkspaceProjects = { roots, remotes: new Set(), gitDirectories: new Set() },
+  order?: GroupOrder,
 ): ProjectGroup[] {
   const rootKeys = new Set(workspace.roots.map(pathKey));
   const groups = new Map<string, ProjectGroup>();
@@ -106,6 +109,9 @@ export function groupChats(chats: Chat[], roots: string[], grouping: Grouping = 
   }
   const result = [...groups.values()];
   for (const group of result) group.chats.sort((a, b) => b.recencyAt - a.recencyAt || a.id.localeCompare(b.id));
-  return result.sort((a, b) => Number(b.current) - Number(a.current)
-    || (b.chats[0]?.recencyAt ?? 0) - (a.chats[0]?.recencyAt ?? 0) || a.cwd.localeCompare(b.cwd));
+  return result.sort((a, b) => {
+    const byActivity = b.chats[0]!.recencyAt - a.chats[0]!.recencyAt;
+    if (!order) return Number(b.current) - Number(a.current) || byActivity || a.cwd.localeCompare(b.cwd);
+    return (order === 'recent' ? byActivity : 0) || byGroupName.compare(a.name, b.name) || a.key.localeCompare(b.key);
+  });
 }

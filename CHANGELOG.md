@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.0
+
+### Added
+
+- Sort all project groups by name or last conversation.
+- Pin project groups and individual conversations across windows.
+
+### Changed
+
+- Show all indexed conversations in All projects and load tree rows as groups expand.
+
 ## 1.4.0
 
 ### Added

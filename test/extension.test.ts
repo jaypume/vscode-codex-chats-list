@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import type { Directory, WorkspaceRepository } from '../src/git';
-import type { Chat, ChatPage, Grouping, Scope } from '../src/model';
+import type { Chat, ChatPage, Grouping, GroupOrder, Scope } from '../src/model';
 import type { ChatTree, TreeNode } from '../src/tree';
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   registerCommand: vi.fn<(id: string, handler: (...args: unknown[]) => unknown) => vscode.Disposable>(),
   executeCommand: vi.fn(),
   openConversation: vi.fn(),
-  promptScope: vi.fn<(items: { value: Scope | Grouping }[]) => Promise<{ value: Scope | Grouping } | undefined>>(),
+  promptScope: vi.fn<(items: { value: Scope | Grouping | GroupOrder }[]) => Promise<{ value: Scope | Grouping | GroupOrder } | undefined>>(),
   promptSearch: vi.fn<(options: vscode.InputBoxOptions) => Promise<string | undefined>>(),
   realpath: vi.fn<(path: string) => Promise<string>>(),
   updateScope: vi.fn<(key: string, value: unknown) => Promise<void>>(),
@@ -168,7 +168,8 @@ test('all commands use the fork namespace and open focuses the fork view', async
   const fixture = await setup();
   expect(mocks.registerCommand.mock.calls.map(([id]) => id)).toEqual([
     'codexChatsList.open', 'codexChatsList.refresh', 'codexChatsList.selectScope',
-    'codexChatsList.selectGrouping', 'codexChatsList.toggleFolders', 'codexChatsList.showAll',
+    'codexChatsList.selectGrouping', 'codexChatsList.sortProjects', 'codexChatsList.pin', 'codexChatsList.unpin',
+    'codexChatsList.toggleFolders', 'codexChatsList.showAll',
     'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.loadMore', 'codexChatsList.openConversation',
   ]);
   await fixture.run('open');
@@ -286,6 +287,58 @@ test('local pagination preserves cached results without touching the Codex conne
   expect(fixture.tree.getChildren().at(-1)?.kind).toBe('more');
   await fixture.run('loadMore');
   expect(fixture.view.badge?.value).toBe(60);
+  expect(mocks.list).toHaveBeenCalledOnce();
+});
+
+test('All lists every cached repository and chat, sorts groups, and pins without requerying Codex', async () => {
+  const chat = (id: string, repo: string, recencyAt: number): Chat =>
+    ({ id, title: id, cwd: '/repos/' + repo, repository: 'github.com/example/' + repo, recencyAt });
+  mocks.list.mockResolvedValueOnce({
+    chats: [
+      ...Array.from({ length: 60 }, (_, i) => chat('noise-' + i, 'noise', 1000 - i)),
+      ...Array.from({ length: 55 }, (_, i) => chat('zebra-' + i, 'zebra-' + i, 900 - i)),
+      chat('old-session', 'alpha', 1),
+      chat('recent-session', 'alpha', 2),
+      chat('middle-session', 'beta', 3),
+    ],
+    nextCursor: null,
+  });
+  const fixture = await setup('repository');
+  await fixture.ready();
+  await fixture.pick('all');
+  const roots = () => fixture.tree.getChildren();
+  const title = (node: TreeNode) => fixture.tree.getTreeItem(node).label;
+  expect(roots()).toHaveLength(58);
+  expect(roots().every(node => node.kind === 'project')).toBe(true);
+  expect(fixture.view.badge?.value).toBe(118);
+  const noise = roots()[0]!;
+  expect(title(noise)).toBe('noise');
+  expect(fixture.tree.getChildren(noise)).toHaveLength(60);
+  expect(title(roots().at(-1)!)).toBe('alpha');
+  mocks.promptScope.mockResolvedValueOnce({ value: 'name' });
+  await fixture.run('sortProjects');
+  const [alpha, beta] = roots();
+  expect(roots().slice(0, 3).map(title)).toEqual(['alpha', 'beta', 'noise']);
+  expect(mocks.updateScope).toHaveBeenLastCalledWith('historyView', expect.objectContaining({ order: 'name' }));
+  await fixture.run('pin', beta);
+  expect(roots().slice(0, 3).map(title)).toEqual(['beta', 'alpha', 'noise']);
+  expect(fixture.tree.getTreeItem(roots()[0]!)).toMatchObject({ contextValue: 'pinnedProject', iconPath: { id: 'pinned' } });
+  const [, old] = fixture.tree.getChildren(alpha);
+  await fixture.run('pin', old);
+  expect(fixture.tree.getChildren(roots()[1]!).map(title)).toEqual(['old-session', 'recent-session']);
+  expect(fixture.tree.getTreeItem(fixture.tree.getChildren(roots()[1]!)[0]!)).toMatchObject({ contextValue: 'pinnedChat' });
+  await fixture.search('recent');
+  expect(roots().map(title)).toEqual(['alpha']);
+  expect(fixture.tree.getChildren(roots()[0]!).map(title)).toEqual(['recent-session']);
+  await fixture.run('clearSearch');
+  mocks.promptScope.mockResolvedValueOnce({ value: 'recent' });
+  await fixture.run('sortProjects');
+  expect(roots().slice(0, 2).map(title)).toEqual(['beta', 'noise']);
+  await fixture.run('unpin', roots()[0]);
+  const sessions = fixture.tree.getChildren(roots().at(-1)!);
+  expect(sessions.map(title)).toEqual(['old-session', 'recent-session']);
+  await fixture.run('unpin', sessions[0]);
+  expect(fixture.tree.getChildren(roots().at(-1)!).map(title)).toEqual(['recent-session', 'old-session']);
   expect(mocks.list).toHaveBeenCalledOnce();
 });
 

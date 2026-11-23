@@ -14,10 +14,11 @@ type ProjectNode = {
   duplicate: boolean;
   filtered: boolean;
   expanded: boolean;
+  pinned: boolean;
 };
 export type TreeNode =
   | ProjectNode
-  | { kind: 'chat'; chat: Chat; filtered: boolean }
+  | { kind: 'chat'; chat: Chat; filtered: boolean; pinned: boolean }
   | { kind: 'more' };
 
 const t = createLocalizer(vscode.env.language);
@@ -39,14 +40,17 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
   private nodes: TreeNode[] = [];
   private opening: string | null = null;
 
-  constructor(private readonly state: vscode.Memento) {
+  constructor(
+    private readonly state: vscode.Memento,
+    private readonly isChatPinned: (id: string) => boolean,
+  ) {
     this.expansion = new Map(
       Object.entries(state.get<Record<string, boolean>>('projectExpansion', {})),
     );
   }
 
   update(
-    groups: ProjectGroup[],
+    groups: (ProjectGroup & { pinned: boolean })[],
     scope: Scope,
     filtered: boolean,
     more: boolean,
@@ -59,9 +63,13 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       group,
       duplicate: (counts.get(group.name) ?? 0) > 1,
       filtered,
+      pinned: group.pinned,
       expanded:
         filtered || (this.expansion.get(group.key) ?? (scope === 'current' || group.current)),
     }));
+    this.nodes.sort(
+      (a, b) => Number(b.kind === 'project' && b.pinned) - Number(a.kind === 'project' && a.pinned),
+    );
     if (more) this.nodes.push({ kind: 'more' });
     this.opening = opening;
     this.refreshTimes();
@@ -80,9 +88,15 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
 
   getChildren(node?: TreeNode): TreeNode[] {
     if (!node) return this.nodes;
-    return node.kind === 'project'
-      ? node.group.chats.map((chat) => ({ kind: 'chat', chat, filtered: node.filtered }))
-      : [];
+    if (node.kind !== 'project') return [];
+    return node.group.chats
+      .map((chat) => ({
+        kind: 'chat' as const,
+        chat,
+        filtered: node.filtered,
+        pinned: this.isChatPinned(chat.id),
+      }))
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned));
   }
 
   getTreeItem(node: TreeNode): vscode.TreeItem {
@@ -103,7 +117,8 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
           : vscode.TreeItemCollapsibleState.Collapsed,
       );
       item.id = `${prefix}project:${group.key}`;
-      item.iconPath = vscode.ThemeIcon.Folder;
+      item.iconPath = node.pinned ? new vscode.ThemeIcon('pinned') : vscode.ThemeIcon.Folder;
+      item.contextValue = node.pinned ? 'pinnedProject' : 'project';
       const count = t(group.chats.length === 1 ? 'chatsOne' : 'chatsOther', {
         count: group.chats.length,
       });
@@ -115,16 +130,18 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       ]
         .filter(Boolean)
         .join(' · ');
-      item.tooltip = group.cwd;
+      item.tooltip = node.pinned ? `${group.cwd}\n${t('pinnedLabel')}` : group.cwd;
       return item;
     }
     const { chat } = node;
     const item = new vscode.TreeItem(chat.title);
     item.id = `${prefix}chat:${chat.id}`;
+    item.contextValue = node.pinned ? 'pinnedChat' : 'chat';
     const time = relativeTime(chat.recencyAt);
     const opening = this.opening === chat.id;
     item.description = opening ? t('opening') : time;
     if (opening) item.iconPath = new vscode.ThemeIcon('loading~spin');
+    else if (node.pinned) item.iconPath = new vscode.ThemeIcon('pinned');
     const date = new Date(chat.recencyAt * 1000);
     const timestamp =
       chat.recencyAt > 0 && Number.isFinite(date.getTime())
@@ -134,9 +151,13 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       chat.title,
       `${t('recentConversation')}: ${timestamp}`,
       `${t('path')}: ${chat.cwd}`,
+      ...(node.pinned ? [t('pinnedLabel')] : []),
     ].join('\n');
     item.accessibilityInformation = {
-      label: t(opening ? 'openingLabel' : 'openLabel', { title: chat.title, time }),
+      label: [
+        t(opening ? 'openingLabel' : 'openLabel', { title: chat.title, time }),
+        ...(node.pinned ? [t('pinnedLabel')] : []),
+      ].join(', '),
     };
     item.command = {
       command: OPEN_CONVERSATION,

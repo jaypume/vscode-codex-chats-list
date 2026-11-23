@@ -2,16 +2,18 @@
 
 ```mermaid
 flowchart LR
-  UI["VS Code 原生界面<br/>范围、分组和过滤"]
+  UI["VS Code 原生界面<br/>范围、分组、排序和置顶"]
   Host["工作区扩展宿主<br/>同步和本地查询"]
   Git["工作区 Git"]
   Server["Codex app-server"]
   Codex["官方 Codex 侧栏"]
-  Prefs["工作区状态<br/>范围和项目展开偏好"]
+  Prefs["工作区状态<br/>范围、排序和展开偏好"]
   Index["扩展全局存储<br/>共享会话索引"]
+  Pins["扩展全局存储<br/>项目与会话置顶"]
   UI <-->|"操作和节点更新"| Host
   Host <-->|"本地 stdio：thread/list"| Server
   Host <-->|"列表元数据和同步进度"| Index
+  Host <-->|"读写置顶标记"| Pins
   Git -->|"origin 和 upstream"| Host
   Host <-->|"保存视图偏好"| Prefs
   Host -->|"当前窗口 URI"| Codex
