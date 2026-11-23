@@ -2,7 +2,7 @@
 
 English · [简体中文](README.zh-CN.md)
 
-Browse Codex conversations by project, then continue in the official Codex sidebar. The native VS Code tree supports project groups, title search, and pagination.
+Browse Codex conversations by project, then continue in the official Codex sidebar. The native VS Code tree supports project groups and title search.
 
 ## Install and browse
 
@@ -23,8 +23,8 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 | Pin a project or conversation | Right-click a project group or conversation and choose **Pin** or **Unpin**. Pinned groups come first. Pinned conversations come first within their group. |
 | Hide or restore items | Right-click a project group or conversation and choose **Hide**. Use **… → Toggle Hidden Items View** to find hidden items and right-click **Unhide** to restore them. |
 | Assign a conversation | Right-click a conversation and choose **Move to Repository…**. Pick a known repository or choose a Git folder. In **By Repository**, Current and All follow the assignment. Use **Restore Automatic Grouping** to clear it. |
-| Delete conversations | Right-click a conversation or project group and choose **Delete Conversations…**. Confirm permanent deletion in Codex. Project deletion covers the group's indexed conversations, including those outside the current view filters and page. |
-| Load and refresh | **All projects** shows every indexed group and conversation. In **Current project**, use **Load more conversations** when available. **Refresh Conversations** checks recent activity. |
+| Delete conversations | Right-click a conversation or project group and choose **Delete Conversations…**. Confirm permanent deletion in Codex. Project deletion covers all indexed conversations in the group, including those excluded by the current filters. |
+| Load and refresh | **Current project** and **All projects** show all matching indexed conversations. Older conversations appear automatically as the index fills. **Refresh Conversations** checks recent activity. |
 
 With **By Repository**, the current scope matches either the workspace repository’s `origin` or `upstream`. A matching remote also finds conversations from moved checkouts. Local repositories with no remote group under their Git root.
 
@@ -32,9 +32,9 @@ GitHub repository IDs also group conversations across repository renames. Reposi
 
 Ordinary folders use their directory names and remain distinct by path. If the folder is missing and Codex saved no Git identity, the group shows **Source unknown**. The folder filter hides only confirmed non-Git folders. **By Folder** keeps separate working-directory groups and matches exact workspace paths for **Current project**.
 
-The first scan indexes history in the background. Results appear as pages become available. The local index is shared by windows with the same VS Code profile, extension host, and Codex source. Switching the scope or grouping, searching titles, and loading more read from the index. Background updates check recent activity only while the view is visible.
+The first scan builds the index in the background while the view is visible. Results appear as each page arrives. Windows with the same VS Code profile, extension host, and Codex source share the index. After a restart, the view shows cached results and resumes from the saved cursor. Scope, grouping, and title search use the cached results.
 
-The index stores listing metadata, including sanitized repository keys. Selecting a cached conversation checks its metadata with Codex before opening. Renames or archives outside the recently checked activity may appear stale until that conversation is selected. Hosts without Node SQLite use an in-memory index.
+The index stores conversation IDs and the metadata needed for the list, such as titles, paths, timestamps, and sanitized repository keys. Codex manages conversation contents. Background updates check recent activity while the view is visible. Selecting a cached conversation checks its metadata with Codex before opening. Older renames or archives may appear stale until that conversation is selected. Hosts without Node SQLite use an in-memory index.
 
 The sort order is saved per workspace. Pins and hidden items are shared by windows on the same VS Code profile and extension host.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.0
+
+### Changed
+
+- Show every indexed conversation in Current project as background indexing makes results available.
+
 ## 1.13.2
 
 ### Fixed

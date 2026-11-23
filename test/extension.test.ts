@@ -153,7 +153,6 @@ async function setup(saved?: Scope | 'repository') {
       ...api.snapshot(),
       search: view.message?.split(' · Search: ')[1]?.split('\n')[0] ?? '',
       groups: nodes.flatMap(node => node.kind === 'project' ? [node.group] : []),
-      hasMore: nodes.some(node => node.kind === 'more'),
     });
   }));
   const run = async (command: string, ...args: unknown[]) => {
@@ -224,7 +223,7 @@ test('all commands use the fork namespace and open focuses the fork view', async
     'codexChatsList.hide', 'codexChatsList.unhide', 'codexChatsList.moveToRepository', 'codexChatsList.restoreRepository',
     'codexChatsList.toggleHidden', 'codexChatsList.delete',
     'codexChatsList.toggleFolders', 'codexChatsList.showAll', 'codexChatsList.showCurrent',
-    'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.loadMore', 'codexChatsList.openConversation',
+    'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.openConversation',
   ]);
   await fixture.run('open');
   expect(mocks.executeCommand).toHaveBeenCalledWith('codexChatsList.list.focus');
@@ -368,19 +367,26 @@ test('unchanged polling does not publish state and hidden views pause the index'
   expect(mocks.list).toHaveBeenCalledTimes(5);
 });
 
-test('local pagination preserves cached results without touching the Codex connection', async () => {
-  mocks.list.mockResolvedValueOnce({
-    chats: Array.from({ length: 60 }, (_, i) => ({ ...page('thread-' + i).chats[0]!, recencyAt: i + 1 })),
-    nextCursor: null,
-  });
+test('Current displays all indexed conversations while older pages load in the background', async () => {
+  const chats = Array.from({ length: 60 }, (_, i) => ({
+    ...page('thread-' + i).chats[0]!, recencyAt: 60 - i,
+  }));
+  mocks.list
+    .mockResolvedValueOnce({ chats: chats.slice(0, 50), nextCursor: 'older' })
+    .mockResolvedValueOnce({ chats: chats.slice(50), nextCursor: null });
   const fixture = await setup();
   await fixture.ready();
   const visibleChats = () => fixture.tree.getChildren().flatMap(node => fixture.tree.getChildren(node));
   expect(visibleChats()).toHaveLength(50);
-  expect(fixture.tree.getChildren().at(-1)?.kind).toBe('more');
-  await fixture.run('loadMore');
+  expect(fixture.tree.getChildren()).toHaveLength(1);
+  expect(fixture.api.snapshot().indexed).toBe(false);
+  await vi.advanceTimersByTimeAsync(150);
   expect(visibleChats()).toHaveLength(60);
-  expect(mocks.list).toHaveBeenCalledOnce();
+  expect(fixture.tree.getChildren()).toHaveLength(1);
+  expect(fixture.api.snapshot().indexed).toBe(true);
+  await fixture.search('thread-59');
+  expect(visibleChats()).toMatchObject([{ kind: 'chat', chat: { id: 'thread-59' } }]);
+  expect(mocks.list.mock.calls.map(args => args[2])).toEqual([null, 'older']);
 });
 
 test('hidden items can be filtered and restored without changing their pins or opening Codex', async () => {

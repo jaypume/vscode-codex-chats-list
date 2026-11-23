@@ -6,7 +6,6 @@ import { formatConversationDate } from './time';
 
 export const VIEW_ID = 'codexChatsList.list';
 export const OPEN_CONVERSATION = 'codexChatsList.openConversation';
-export const LOAD_MORE = 'codexChatsList.loadMore';
 const AUTO_EXPAND_LIMIT = 50;
 const DATE_SCHEME = 'codex-chats-list-date';
 const PROJECT_ACTIVITY_PATH = '/project/';
@@ -32,10 +31,7 @@ type ProjectNode = {
   hidden: boolean;
 };
 type ChatFlags = { pinned: boolean; hidden: boolean; assignedRepository?: string };
-export type TreeNode =
-  | ProjectNode
-  | ({ kind: 'chat'; chat: Chat; filtered: boolean } & ChatFlags)
-  | { kind: 'more' };
+export type TreeNode = ProjectNode | ({ kind: 'chat'; chat: Chat; filtered: boolean } & ChatFlags);
 
 const t = createLocalizer(vscode.env.language);
 const { locale } = localization(vscode.env.language);
@@ -99,7 +95,7 @@ export class ChatTree
   private readonly expansion: Map<string, boolean>;
   private readonly currentIcon: vscode.Uri;
   private readonly pinnedIcon: vscode.Uri;
-  private nodes: TreeNode[] = [];
+  private nodes: ProjectNode[] = [];
   private opening: string | null = null;
   private showBadges = true;
 
@@ -120,7 +116,6 @@ export class ChatTree
     groups: (ProjectGroup & { pinned: boolean; hidden: boolean; latestConversationAt: number })[],
     scope: Scope,
     filtered: boolean,
-    more: boolean,
     opening: string | null,
   ): void {
     const qualifiers = projectQualifiers(groups);
@@ -139,10 +134,7 @@ export class ChatTree
         ? expandFiltered
         : (this.expansion.get(group.key) ?? (scope === 'current' || group.current)),
     }));
-    this.nodes.sort(
-      (a, b) => Number(b.kind === 'project' && b.pinned) - Number(a.kind === 'project' && a.pinned),
-    );
-    if (more) this.nodes.push({ kind: 'more' });
+    this.nodes.sort((a, b) => Number(b.pinned) - Number(a.pinned));
     this.opening = opening;
     this.refresh();
   }
@@ -204,13 +196,6 @@ export class ChatTree
   }
 
   getTreeItem(node: TreeNode): vscode.TreeItem {
-    if (node.kind === 'more') {
-      const item = new vscode.TreeItem(t('more'));
-      item.id = 'more';
-      item.iconPath = new vscode.ThemeIcon('ellipsis');
-      item.command = { command: LOAD_MORE, title: t('more') };
-      return item;
-    }
     const prefix = node.filtered ? 'filtered:' : '';
     const hidden = node.hidden ? '.hidden' : '';
     if (node.kind === 'project') {

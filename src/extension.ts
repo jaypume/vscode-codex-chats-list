@@ -12,12 +12,11 @@ import { openInCodex } from './routing';
 import {
   filterTitles, groupChats, pathKey, selectChats, uniquePaths, type Chat, type Grouping, type GroupOrder, type Scope, type WorkspaceProjects,
 } from './model';
-import { ChatTree, LOAD_MORE, OPEN_CONVERSATION, projectCountDecorations, VIEW_ID, type TreeNode } from './tree';
+import { ChatTree, OPEN_CONVERSATION, projectCountDecorations, VIEW_ID, type TreeNode } from './tree';
 
 const t = createLocalizer(vscode.env.language);
 const OFFICIAL_ID = 'openai.chatgpt';
 const INDEX_STEP_MS = 150;
-const PAGE_SIZE = 50;
 const SEARCH_LIMIT = 200;
 const SEARCH_DELAY_MS = 120;
 const LEGACY_CONFIG_SECTION = 'codexProjectChats';
@@ -90,7 +89,6 @@ class CodexChatsListView implements vscode.Disposable {
   private repositoryRefreshQueued = false;
   private forceRepositoryPaths = false;
   private repositoryRenderTimer?: ReturnType<typeof setTimeout>;
-  private limit = PAGE_SIZE;
   private generation = 0;
   private workspaceGeneration = 0;
   private syncing = false;
@@ -212,7 +210,7 @@ class CodexChatsListView implements vscode.Disposable {
     if (scope === this.scope || this.disposed) return;
     this.scope = scope;
     this.updateScopeContext();
-    this.resetPage();
+    this.render();
     await this.saveView();
   }
 
@@ -234,7 +232,7 @@ class CodexChatsListView implements vscode.Disposable {
   }
 
   async setFlag(node: TreeNode | undefined, flag: 'pinned' | 'hidden', enabled: boolean): Promise<void> {
-    if (!node || node.kind === 'more' || this.disposed) return;
+    if (!node || this.disposed) return;
     const store = flag === 'pinned' ? this.pins : this.hidden;
     try {
       await store.set(node.kind, node.kind === 'project' ? node.group.key : node.chat.id, enabled);
@@ -250,7 +248,7 @@ class CodexChatsListView implements vscode.Disposable {
   toggleHidden(): void {
     if (this.disposed) return;
     this.hiddenOnly = !this.hiddenOnly;
-    this.resetPage();
+    this.render();
   }
 
   private assignmentLabel(id: string): string | undefined {
@@ -339,7 +337,7 @@ class CodexChatsListView implements vscode.Disposable {
 
   async deleteConversations(node: TreeNode | undefined): Promise<void> {
     const history = this.history;
-    if (!node || node.kind === 'more' || !history || this.disposed || this.deleting) return;
+    if (!node || !history || this.disposed || this.deleting) return;
     if (node.kind === 'project' && !history.complete) {
       void vscode.window.showInformationMessage(t('deleteWaitingForIndex'));
       return;
@@ -402,7 +400,7 @@ class CodexChatsListView implements vscode.Disposable {
     const option = await vscode.window.showQuickPick(options, { title: t('grouping') });
     if (!option || option.value === this.grouping || this.disposed) return;
     this.grouping = option.value;
-    this.resetPage();
+    this.render();
     this.refreshRepositories();
     await this.saveView();
   }
@@ -410,7 +408,7 @@ class CodexChatsListView implements vscode.Disposable {
   async toggleFolders(): Promise<void> {
     if (this.disposed) return;
     this.showFolders = !this.showFolders;
-    this.resetPage();
+    this.render();
     await this.saveView();
   }
 
@@ -428,8 +426,6 @@ class CodexChatsListView implements vscode.Disposable {
     const input = vscode.window.createInputBox();
     this.searchInput = input;
     const previousSearch = this.search;
-    const previousLimit = this.limit;
-    const previousScope = this.scope;
     input.title = `${t('search')} · ${t(this.scope)}`;
     input.placeholder = t('searchPlaceholder');
     input.value = previousSearch;
@@ -456,32 +452,25 @@ class CodexChatsListView implements vscode.Disposable {
         accept.dispose();
         hide.dispose();
         input.dispose();
-        if (!accepted) this.setSearch(previousSearch, this.scope === previousScope ? previousLimit : PAGE_SIZE);
+        if (!accepted) this.setSearch(previousSearch);
         resolve();
       });
       input.show();
     });
   }
 
-  setSearch(value: string, restoreLimit?: number): void {
+  setSearch(value: string): void {
     const search = value.slice(0, SEARCH_LIMIT).trim();
-    if (this.disposed || (search === this.search && (restoreLimit === undefined || restoreLimit === this.limit))) return;
+    if (this.disposed || search === this.search) return;
     if (Boolean(search) !== Boolean(this.search)) {
       void vscode.commands.executeCommand('setContext', 'codexChatsList.hasSearch', Boolean(search));
     }
     this.search = search;
-    this.limit = restoreLimit ?? PAGE_SIZE;
-    this.render();
-  }
-
-  private resetPage() {
-    this.limit = PAGE_SIZE;
     this.render();
   }
 
   async refresh(): Promise<void> {
     if (this.disposed || !this.view) return;
-    this.resetPage();
     await vscode.window.withProgress({ location: { viewId: VIEW_ID } }, async () => {
       await this.updateWorkspace(true);
       await this.sync(true);
@@ -502,12 +491,8 @@ class CodexChatsListView implements vscode.Disposable {
     this.previousRows = '';
     this.chats = [];
     this.repositoryProjects = undefined;
-    await this.refresh();
-  }
-
-  more(): void {
-    this.limit += PAGE_SIZE;
     this.render();
+    await this.refresh();
   }
 
   private async sync(force = false): Promise<void> {
@@ -633,27 +618,15 @@ class CodexChatsListView implements vscode.Disposable {
       const pinned = this.pins.has('project', group.key, group.preferenceAliases);
       return chats.length ? [{ ...group, chats, pinned, hidden, latestConversationAt: chats[0]!.recencyAt }] : [];
     });
-    const eligibleCount = groups.reduce((sum, group) => sum + group.chats.length, 0);
-    let visible = groups;
-    if (this.scope === 'current' && eligibleCount > this.limit) {
-      const eligible = new Set(groups.flatMap(group => group.chats));
-      const page = new Set(selected.filter(chat => eligible.has(chat)).slice(0, this.limit));
-      visible = groups.flatMap(group => {
-        const chats = group.chats.filter((chat, i) => page.has(chat)
-          || (group.pinned && i === 0) || this.pins.has('chat', chat.id));
-        return chats.length ? [{ ...group, chats }] : [];
-      });
-    }
-    const count = visible.reduce((sum, group) => sum + group.chats.length, 0);
     if (this.error) this.view.message = this.error;
     else if (this.scope === 'current' && !this.projects.roots.length) this.view.message = undefined;
     else {
       if (!this.complete) info.push(t('indexing'));
-      else if (!count) info.push(t(this.hiddenOnly ? 'emptyHidden' : this.search ? 'emptySearchTitle' : this.scope === 'current' ? 'emptyCurrentDetail' : 'emptyAllDetail'));
+      else if (!groups.length) info.push(t(this.hiddenOnly ? 'emptyHidden' : this.search ? 'emptySearchTitle' : this.scope === 'current' ? 'emptyCurrentDetail' : 'emptyAllDetail'));
       this.view.message = info.join(' · ');
     }
 
-    this.tree.update(visible, this.scope, Boolean(this.search) || this.hiddenOnly, eligibleCount > count, this.opening);
+    this.tree.update(groups, this.scope, Boolean(this.search) || this.hiddenOnly, this.opening);
   }
 
   private viewProjects(chats = this.chats): WorkspaceProjects {
@@ -730,7 +703,6 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('codexChatsList.showCurrent', () => provider.setScope('current')),
     vscode.commands.registerCommand('codexChatsList.search', () => provider.promptSearch()),
     vscode.commands.registerCommand('codexChatsList.clearSearch', () => provider.setSearch('')),
-    vscode.commands.registerCommand(LOAD_MORE, () => provider.more()),
     vscode.commands.registerCommand(OPEN_CONVERSATION, (id: string) => provider.open(id)),
     vscode.workspace.onDidChangeWorkspaceFolders(() => { void provider.updateWorkspace(); }),
     vscode.workspace.onDidChangeConfiguration(event => {
