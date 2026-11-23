@@ -13,11 +13,14 @@ export async function openInCodex(id: string): Promise<void> {
   const official = vscode.extensions.getExtension('openai.chatgpt');
   if (!official) throw new Error(t('errorEnableOfficial'));
   await official.activate();
-  // For the application URI scheme, asExternalUri creates a callback bound to this
-  // window. Sending a raw vscode:// link through the OS can select another window.
-  const target = await vscode.env.asExternalUri(vscode.Uri.from({
+  const route = vscode.Uri.from({
     scheme: vscode.env.uriScheme, authority: 'openai.chatgpt', path: `/local/${id}`,
-  }));
-  await vscode.commands.executeCommand('chatgpt.openSidebar');
-  if (!await vscode.env.openExternal(target)) throw new Error(t('errorRouteRejected'));
+  });
+  const target = await vscode.env.asExternalUri(route);
+  if (target.scheme !== route.scheme || target.authority !== route.authority || target.path !== route.path
+    || !/^\d+$/.test(new URLSearchParams(target.query).get('windowId') ?? '')) {
+    throw new Error(t('errorRouteRejected'));
+  }
+  // Use the workbench's URI opener so windowId is resolved inside this VS Code process.
+  await vscode.commands.executeCommand('vscode.open', target);
 }

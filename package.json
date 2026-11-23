@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -39,8 +39,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "format": "oxfmt --write src/git.ts src/pins.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
-    "format:check": "oxfmt --check src/git.ts src/pins.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
+    "format": "oxfmt --write src/git.ts src/pins.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
+    "format:check": "oxfmt --check src/git.ts src/pins.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
     "lint": "oxlint --max-warnings=0 src",
     "lint:fix": "pnpm run lint --fix",
     "package": "node -e \"require('node:fs').mkdirSync('release-artifact', { recursive: true })\" && vsce package --no-dependencies --out release-artifact",

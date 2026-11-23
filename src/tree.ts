@@ -130,7 +130,13 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       ]
         .filter(Boolean)
         .join(' · ');
-      item.tooltip = node.pinned ? `${group.cwd}\n${t('pinnedLabel')}` : group.cwd;
+      item.tooltip = [
+        group.repository,
+        group.cwd !== group.repository && group.cwd,
+        node.pinned && t('pinnedLabel'),
+      ]
+        .filter(Boolean)
+        .join('\n');
       return item;
     }
     const { chat } = node;

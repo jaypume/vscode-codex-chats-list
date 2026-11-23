@@ -23,7 +23,9 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 | Pin a project or conversation | Right-click a project group or conversation and choose **Pin** or **Unpin**. Pinned groups come first. Pinned conversations come first within their group. |
 | Load and refresh | **All projects** shows every indexed group and conversation. In **Current project**, use **Load more conversations** when available. **Refresh Conversations** checks recent activity. |
 
-With **By Repository**, the current scope matches either the workspace repository’s `origin` or `upstream`. A matching remote also finds conversations from moved checkouts. In **All projects**, different saved remotes have their own groups. Local repositories with no remote group under their Git root.
+With **By Repository**, the current scope matches either the workspace repository’s `origin` or `upstream`. A matching remote also finds conversations from moved checkouts. Local repositories with no remote group under their Git root.
+
+GitHub repository IDs also group conversations across repository renames. Repository details prefer a matching checkout in the current workspace, followed by the most recent verified checkout. Conversation tooltips show the original path. GitHub metadata is cached locally. The extension uses an existing GitHub CLI login for private repositories and can look up public repositories without signing in.
 
 Ordinary folders use their directory names and remain distinct by path. If the folder is missing and Codex saved no Git identity, the group shows **Source unknown**. The folder filter hides only confirmed non-Git folders. **By Folder** keeps separate working-directory groups and matches exact workspace paths for **Current project**.
 

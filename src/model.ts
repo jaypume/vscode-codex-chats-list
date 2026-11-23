@@ -1,6 +1,7 @@
 import { createLocalizer, type Localize } from './i18n';
 import path from 'node:path';
 import { repositoryKey, type Directory } from './git';
+import type { RepositoryPresentation } from './repositories';
 
 /** Conversation metadata displayed in the project tree. */
 export interface Chat {
@@ -15,7 +16,16 @@ export interface Chat {
 }
 
 export interface ChatPage { chats: Chat[]; nextCursor: string | null }
-export interface ProjectGroup { key: string; name: string; cwd: string; current: boolean; unknown?: boolean; chats: Chat[] }
+export interface ProjectGroup {
+  key: string;
+  name: string;
+  cwd: string;
+  current: boolean;
+  unknown?: boolean;
+  repository?: string;
+  pinAliases?: readonly string[];
+  chats: Chat[];
+}
 export type Scope = 'current' | 'all';
 export type Grouping = 'folder' | 'repository';
 export type GroupOrder = 'recent' | 'name';
@@ -25,6 +35,7 @@ export interface WorkspaceProjects {
   roots: string[];
   remotes: ReadonlySet<string>;
   gitDirectories: ReadonlySet<string>;
+  repositoryView?: ReadonlyMap<string, RepositoryPresentation>;
 }
 
 /** Validate and select fields from the app-server response. */
@@ -64,7 +75,7 @@ export function uniquePaths(paths: string[]): string[] {
 
 function inWorkspace(chat: Chat, roots: ReadonlySet<string>, workspace: WorkspaceProjects, grouping: Grouping): boolean {
   if (grouping === 'repository') {
-    if (chat.repository) return workspace.remotes.has(chat.repository);
+    if (chat.repository) return workspace.remotes.has(chat.repository) || Boolean(workspace.repositoryView?.get(chat.repository)?.current);
     if (chat.directory?.kind === 'git') return workspace.gitDirectories.has(pathKey(chat.directory.common));
   }
   return roots.has(pathKey(chat.cwd));
@@ -89,17 +100,20 @@ export function groupChats(chats: Chat[], roots: string[], grouping: Grouping = 
   const rootKeys = new Set(workspace.roots.map(pathKey));
   const groups = new Map<string, ProjectGroup>();
   for (const chat of chats) {
-    const remote = grouping === 'repository' ? chat.repository : undefined;
+    const savedRemote = grouping === 'repository' ? chat.repository : undefined;
+    const repository = savedRemote ? workspace.repositoryView?.get(savedRemote) : undefined;
+    const remote = repository?.remote ?? savedRemote;
     const local = grouping === 'repository' && !remote && chat.directory?.kind === 'git' ? chat.directory : undefined;
     const cwd = local?.root ?? chat.cwd;
-    const key = remote ? `remote:${remote}` : local ? `git:${pathKey(local.common)}` : pathKey(cwd);
+    const key = repository?.key ?? (remote ? `remote:${remote}` : local ? `git:${pathKey(local.common)}` : pathKey(cwd));
     let group = groups.get(key);
     if (!group) {
       const normalized = (remote ?? cwd).replace(/\\/g, '/').replace(/\/$/, '');
       const unknown = grouping === 'repository' && !remote && !local && chat.directory?.kind !== 'folder' && !chat.hasGit;
       group = {
-        key, name: normalized.split('/').at(-1) || cwd, cwd: remote ?? cwd,
+        key, name: normalized.split('/').at(-1) || cwd, cwd: repository?.checkout ?? remote ?? cwd,
         current: inWorkspace(chat, rootKeys, workspace, grouping),
+        ...(remote ? { repository: remote, pinAliases: repository?.pinAliases } : {}),
         ...(unknown ? { unknown: true } : {}), chats: [],
       };
       groups.set(key, group);

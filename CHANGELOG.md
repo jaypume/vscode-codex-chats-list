@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.0
+
+### Added
+
+- Group renamed or moved GitHub repositories by their confirmed repository IDs, preserving existing project pins.
+- Prefer a verified local checkout in repository details and preserve the original working directory on each conversation.
+
+### Fixed
+
+- Open conversations in the initiating VS Code window through the workbench URI opener.
+
 ## 1.5.0
 
 ### Added

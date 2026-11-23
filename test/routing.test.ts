@@ -2,7 +2,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
   extensions: { getExtension: vi.fn<(id: string) => { activate: () => Promise<void> } | undefined>() },
-  commands: { executeCommand: vi.fn<(command: string) => Promise<void>>() },
+  commands: { executeCommand: vi.fn<(command: string, uri?: Record<string, string>) => Promise<void>>() },
   Uri: { from: vi.fn<(value: Record<string, string>) => Record<string, string>>() },
   env: {
     language: 'en', uriScheme: 'vscode',
@@ -31,15 +31,20 @@ test('sidebar route reveals Codex and forwards the current-window URI without an
   expect(api.extensions.getExtension).toHaveBeenCalledWith('openai.chatgpt');
   expect(activate).toHaveBeenCalledOnce();
   expect(api.env.asExternalUri).toHaveBeenCalledWith({ scheme: 'vscode', authority: 'openai.chatgpt', path: '/local/thread-0001' });
-  expect(api.commands.executeCommand).toHaveBeenCalledExactlyOnceWith('chatgpt.openSidebar');
-  expect(api.env.openExternal).toHaveBeenCalledExactlyOnceWith(resolved);
-  expect(api.commands.executeCommand.mock.invocationCallOrder[0]).toBeLessThan(api.env.openExternal.mock.invocationCallOrder[0] ?? 0);
+  expect(api.commands.executeCommand).toHaveBeenCalledExactlyOnceWith('vscode.open', resolved);
+  expect(api.env.openExternal).not.toHaveBeenCalled();
 });
 
 test('sidebar routing uses the running editor scheme and rejects failed routing', async () => {
-  api.env.uriScheme = 'vscode-insiders'; api.env.openExternal.mockResolvedValue(false);
-  await expect(openInCodex('thread-0001')).rejects.toThrow(/did not accept/);
+  api.env.uriScheme = 'vscode-insiders';
+  const insiders = { ...resolved, scheme: 'vscode-insiders' };
+  api.env.asExternalUri.mockResolvedValueOnce(insiders);
+  await openInCodex('thread-0001');
   expect(api.env.asExternalUri).toHaveBeenCalledWith(expect.objectContaining({ scheme: 'vscode-insiders' }));
+  expect(api.commands.executeCommand).toHaveBeenCalledExactlyOnceWith('vscode.open', insiders);
+  api.env.asExternalUri.mockResolvedValueOnce({ ...insiders, query: '' });
+  await expect(openInCodex('thread-0001')).rejects.toThrow(/did not accept/);
+  expect(api.commands.executeCommand).toHaveBeenCalledOnce();
 });
 
 test('invalid IDs and a missing official extension cause no navigation', async () => {
@@ -52,6 +57,7 @@ test('invalid IDs and a missing official extension cause no navigation', async (
 });
 
 test('routing errors follow the VS Code display language', async () => {
-  api.env.language = 'zh-cn'; api.env.openExternal.mockResolvedValue(false);
+  api.env.language = 'zh-cn';
+  api.env.asExternalUri.mockResolvedValueOnce({ ...resolved, scheme: 'https' });
   await expect(openInCodex('thread-0001')).rejects.toThrow(/未接受/);
 });
