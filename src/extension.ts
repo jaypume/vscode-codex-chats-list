@@ -10,6 +10,7 @@ import { parseWebviewMessage, type ViewState } from './protocol';
 import { loadWebviewAssets } from './webview-assets';
 
 const t = createLocalizer(vscode.env.language);
+// Keep the published view ID so VS Code restores the existing sidebar placement.
 const VIEW_ID = 'codexProjectChats.list';
 const OFFICIAL_ID = 'openai.chatgpt';
 const AUTO_REFRESH_MS = 5_000;
@@ -42,7 +43,7 @@ async function workspaceRoots(): Promise<string[]> {
   return uniquePaths([...roots, ...resolved]);
 }
 
-class ProjectChatsView implements vscode.WebviewViewProvider, vscode.Disposable {
+class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposable {
   private view?: vscode.WebviewView;
   private viewSubscriptions: vscode.Disposable[] = [];
   private client?: CodexClient;
@@ -258,7 +259,7 @@ class ProjectChatsView implements vscode.WebviewViewProvider, vscode.Disposable 
 
 /** Register a small, local navigation surface without modifying the official extension. */
 export function activate(context: vscode.ExtensionContext) {
-  const provider = new ProjectChatsView(context);
+  const provider = new CodexChatsListView(context);
   context.subscriptions.push(provider,
     vscode.window.registerWebviewViewProvider(VIEW_ID, provider),
     vscode.commands.registerCommand('codexProjectChats.open', () => vscode.commands.executeCommand(`${VIEW_ID}.focus`)),

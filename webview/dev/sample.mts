@@ -2,7 +2,7 @@ import type { ProjectGroup } from '../../src/model';
 
 /** Synthetic metadata only; never read local conversations for interface development. */
 export function sampleGroups(locale: string): ProjectGroup[] {
-  const root = '/projects/codex-project-chats';
+  const root = '/projects/vscode-codex-chats-list';
   const now = Math.floor(Date.now() / 1000);
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);

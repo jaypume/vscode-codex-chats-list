@@ -8,7 +8,7 @@ import { CodexClient } from '../src/client';
 interface WireCall { method: string; params: Record<string, unknown> }
 
 test.skipIf(process.platform === 'win32')('stdio handshake and list requests keep project/search filters on every page', async () => {
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'project-chats-test-'));
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-chats-list-test-'));
   const binary = path.join(folder, 'codex-fixture');
   const trace = path.join(folder, 'trace.jsonl');
   await fs.writeFile(binary, `#!/usr/bin/env node

@@ -41,7 +41,7 @@ test('release preparation cannot commit, tag, push, or publish', () => {
 });
 
 test('release-it previews and prepares versions without creating commits or tags', () => {
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'project-chats-release-it-'));
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-chats-list-release-it-'));
   const folder = path.join(temporary, 'work');
   const remote = path.join(temporary, 'remote.git');
   fs.mkdirSync(folder);

@@ -49,7 +49,7 @@ export class CodexClient {
           this.fail(new Error(this.t('errorExited')));
         }
       });
-      await this.request('initialize', { clientInfo: { name: 'codex_project_chats', title: 'Codex Project Chats', version: this.version } });
+      await this.request('initialize', { clientInfo: { name: 'codex_chats_list', title: 'Codex Chats List', version: this.version } });
       child.stdin.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n');
     })();
     try { await this.starting; } catch (error) { this.dispose(); throw error; }

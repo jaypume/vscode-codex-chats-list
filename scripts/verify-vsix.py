@@ -9,7 +9,7 @@ archive = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("release-artifact") /
 with ZipFile(archive) as package:
     names = package.namelist()
     packed = json.loads(package.read("extension/package.json"))
-    for field in ("name", "publisher", "version", "repository", "homepage", "bugs", "main"):
+    for field in ("name", "publisher", "displayName", "version", "repository", "homepage", "bugs", "main"):
         assert packed[field] == manifest[field], f"Manifest mismatch: {field}"
     for name in ("extension/readme.md", "extension/changelog.md", "extension/LICENSE.txt",
                  "extension/README.zh-CN.md", "extension/SUPPORT.md", "extension/media/icon.png",
@@ -33,5 +33,6 @@ with ZipFile(archive) as package:
         assert name in ("extension.vsixmanifest", "[Content_Types].xml") or name in docs or name.startswith(allowed), f"Unexpected file: {name}"
     readme = package.read("extension/readme.md").decode()
     assert "Browse Codex conversations by project" in readme
-    assert "https://raw.githubusercontent.com/cixiangtao/codex-project-chats/main/docs/images/" in readme
+    assert "@id:pujie.codex-chats-list" in readme
+    assert "https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/" in readme
 print(f"Verified {archive.name}: {len(names)} public runtime/documentation files")

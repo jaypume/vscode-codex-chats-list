@@ -12,7 +12,7 @@ export default defineConfig({
   plugins: [
     react(),
     {
-      name: 'project-chats-sample-page',
+      name: 'codex-chats-list-sample-page',
       apply: 'serve',
       transformIndexHtml: {
         order: 'pre',

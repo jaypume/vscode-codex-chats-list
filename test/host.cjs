@@ -24,17 +24,17 @@ exports.run = async () => {
   assert.equal(state.count, 3);
   let routingVerified = false;
   let noEditorCreated = false;
-  if (process.env.PROJECT_CHATS_TEST_THREAD) {
+  if (process.env.CODEX_CHATS_LIST_TEST_THREAD) {
     const { openInCodex } = require('../dist/extension/routing.js');
     const tabsBefore = vscode.window.tabGroups.all.flatMap(group => group.tabs).length;
-    await openInCodex(process.env.PROJECT_CHATS_TEST_THREAD);
-    const logRoot = path.join(process.env.PROJECT_CHATS_TEST_WORK, 'vscode-user', 'logs');
+    await openInCodex(process.env.CODEX_CHATS_LIST_TEST_THREAD);
+    const logRoot = path.join(process.env.CODEX_CHATS_LIST_TEST_WORK, 'vscode-user', 'logs');
     await until(async () => {
       const sessions = (await fs.readdir(logRoot)).sort().reverse();
       for (const session of sessions.slice(0, 1)) {
         try {
           const log = await fs.readFile(path.join(logRoot, session, 'window1/exthost/openai.chatgpt/Codex.log'), 'utf8');
-          return log.includes('Handling URI') && log.includes(`/local/${process.env.PROJECT_CHATS_TEST_THREAD}`);
+          return log.includes('Handling URI') && log.includes(`/local/${process.env.CODEX_CHATS_LIST_TEST_THREAD}`);
         } catch { /* Official log file may not have flushed yet. */ }
       }
       return false;
@@ -45,9 +45,9 @@ exports.run = async () => {
     noEditorCreated = true;
     routingVerified = true;
   }
-  await fs.writeFile(path.join(process.env.PROJECT_CHATS_TEST_WORK, 'host-result.json'), JSON.stringify({ webviewReady: true, protocolConnected: true, currentProjectCount: state.count, routingVerified, noEditorCreated }));
+  await fs.writeFile(path.join(process.env.CODEX_CHATS_LIST_TEST_WORK, 'host-result.json'), JSON.stringify({ webviewReady: true, protocolConnected: true, currentProjectCount: state.count, routingVerified, noEditorCreated }));
   // Keep this isolated host available for one visual pass. The harness creates the release file afterwards.
-  if (process.env.PROJECT_CHATS_KEEP_HOST) await until(async () => {
-    try { await fs.access(path.join(process.env.PROJECT_CHATS_TEST_WORK, 'release-host')); return true; } catch { return false; }
+  if (process.env.CODEX_CHATS_LIST_KEEP_HOST) await until(async () => {
+    try { await fs.access(path.join(process.env.CODEX_CHATS_LIST_TEST_WORK, 'release-host')); return true; } catch { return false; }
   }, 600000);
 };

@@ -12,8 +12,9 @@ export function validateVersion(version) {
 /** Check the manifest and the first changelog version before distribution. */
 export function validateVersionFiles(manifest, changelog) {
   const version = validateVersion(manifest.version);
-  assert.equal(manifest.name, 'codex-project-chats');
-  assert.equal(manifest.publisher, 'cixiangtao');
+  assert.equal(manifest.name, 'codex-chats-list');
+  assert.equal(manifest.publisher, 'pujie');
+  assert.equal(manifest.displayName, 'Codex Chats List');
   assert.equal(manifest.private, true);
   const heading = changelog.split(/\r?\n/).find(line => line.startsWith('## '));
   assert(heading === `## ${version}` || heading?.startsWith(`## [${version}]`) || heading?.startsWith(`## ${version} (`),

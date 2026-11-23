@@ -9,6 +9,8 @@ import urllib.request
 from zipfile import ZipFile
 
 GALLERY = 'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery'
+PUBLISHER = 'pujie'
+EXTENSION = 'codex-chats-list'
 
 
 def compare_payload(local, remote):
@@ -25,16 +27,16 @@ def compare_payload(local, remote):
 
 
 def public_payload(version):
-    body = {'filters': [{'criteria': [{'filterType': 7, 'value': 'cixiangtao.codex-project-chats'}]}], 'flags': 3}
+    body = {'filters': [{'criteria': [{'filterType': 7, 'value': f'{PUBLISHER}.{EXTENSION}'}]}], 'flags': 3}
     request = urllib.request.Request(GALLERY, data=json.dumps(body).encode(), headers={
         'Content-Type': 'application/json', 'Accept': 'application/json;api-version=7.2-preview.1',
-        'User-Agent': 'codex-project-chats-release',
+        'User-Agent': f'{EXTENSION}-release',
     })
     with urllib.request.urlopen(request, timeout=30) as response:
         result = json.load(response)
     for group in result.get('results', []):
         for extension in group.get('extensions', []):
-            if extension['publisher']['publisherName'] != 'cixiangtao' or extension['extensionName'] != 'codex-project-chats':
+            if extension['publisher']['publisherName'] != PUBLISHER or extension['extensionName'] != EXTENSION:
                 continue
             for item in extension.get('versions', []):
                 if item['version'] != version:
@@ -57,7 +59,7 @@ def reconcile(archive, wait=False):
     local = Path(archive).read_bytes()
     with ZipFile(io.BytesIO(local)) as package:
         manifest = json.loads(package.read('extension/package.json'))
-    if manifest['publisher'] != 'cixiangtao' or manifest['name'] != 'codex-project-chats':
+    if manifest['publisher'] != PUBLISHER or manifest['name'] != EXTENSION:
         raise ValueError('Wrong release package identity')
     attempts = 21 if wait else 1
     for attempt in range(attempts):

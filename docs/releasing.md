@@ -2,7 +2,7 @@
 
 Marketplace packages are uploaded manually. release-it prepares the version and changelog locally; it does not commit, create tags, push, publish an npm package, or create a GitHub Release. Its Git initialization fetches remote refs to determine the changelog baseline, so preparation needs access to the Git remote. No publishing credentials are required.
 
-The previous disabled Release Please / Microsoft Entra workflow has been removed. Existing remote App credentials and repository variables are not managed by this local configuration.
+The first Marketplace package, `1.1.3`, was built separately before the fork migration. The first package built from the migrated repository is `1.1.4`. Tag its build commit after verifying the corresponding Marketplace package.
 
 ## Prepare a version
 
@@ -42,16 +42,16 @@ Before preparing another version, resolve any pending Marketplace upload and ver
 
 4. Commit and submit the prepared changes through a PR. Merge after required CI passes. The three-platform tests and Linux package inspection remain required; release-it does not replace them.
 
-To generate documentation screenshots with synthetic data, run `pnpm run preview /tmp/codex-project-chats-preview.html`. Append `en` for English; the default is Simplified Chinese. Never capture real history or personal paths for public documentation.
+To generate documentation screenshots with synthetic data, run `pnpm run preview /tmp/codex-chats-list-preview.html`. Append `en` for English; the default is Simplified Chinese. Never capture real history or personal paths for public documentation.
 
 ## Upload and verify
 
-1. Download the inspected VSIX from the merged commit's CI artifact into `release-artifact/<version>/`, or rebuild from that exact commit and run `python3 scripts/verify-vsix.py <package.vsix>`. Retain the commit SHA and package checksum beside the inspected package. Ordinary `pnpm run package` builds go to `release-artifact/codex-project-chats-<version>.vsix`; `python3 scripts/verify-vsix.py` checks that default output. The directory is created automatically and ignored by Git. A new build can replace the same version's ordinary output, so preserve the exact inspected upload in its version subdirectory. Pass `--out <path>` to override the build output location when needed.
-2. The maintainer opens the [publisher management page](https://marketplace.visualstudio.com/manage/publishers/cixiangtao), selects the existing **Codex Project Chats** extension, and uploads the VSIX as an update. Keep publisher `cixiangtao` and extension ID `codex-project-chats` unchanged. For agent-assisted releases, the agent prepares and inspects the package and the maintainer performs the browser upload.
+1. Download the inspected VSIX from the merged commit's CI artifact into `release-artifact/<version>/`, or rebuild from that exact commit and run `python3 scripts/verify-vsix.py <package.vsix>`. Retain the commit SHA and package checksum beside the inspected package. Ordinary `pnpm run package` builds go to `release-artifact/codex-chats-list-<version>.vsix`; `python3 scripts/verify-vsix.py` checks that default output. The directory is created automatically and ignored by Git. A new build can replace the same version's ordinary output, so preserve the exact inspected upload in its version subdirectory. Pass `--out <path>` to override the build output location when needed.
+2. The maintainer uploads the VSIX as an update from the [Codex Chats List management page](https://marketplace.visualstudio.com/manage/publishers/pujie/extensions/codex-chats-list/hub) for `pujie.codex-chats-list`. For agent-assisted releases, the agent prepares and inspects the package and the maintainer performs the browser upload.
 3. Wait for Marketplace validation. An accepted upload is submitted, not yet a public release. Once public, verify every extension payload file against the inspected local package:
 
    ```sh
-   pnpm run release:verify release-artifact/<version>/codex-project-chats-<version>.vsix
+   pnpm run release:verify release-artifact/<version>/codex-chats-list-<version>.vsix
    ```
 
 4. Only after public payload verification succeeds, record a lightweight tag at the exact merged commit:

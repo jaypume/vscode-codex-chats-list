@@ -30,7 +30,7 @@ async function main() {
     .replace('{{LOCALIZATION}}', () => serializeLocalization(language))
     .replace(/<meta\s+http-equiv="Content-Security-Policy"[^>]*>/, '')
     .replace('{{STYLES}}', () => `<style>${theme}\n${css}</style>`)
-    .replace('<body>', `<body><aside class="preview-label">Codex Project Chats · ${locale === 'zh-CN' ? '界面预览 / 示例数据' : 'Preview / sample data'}</aside>`)
+    .replace('<body>', `<body><aside class="preview-label">Codex Chats List · ${locale === 'zh-CN' ? '界面预览 / 示例数据' : 'Preview / sample data'}</aside>`)
     .replace('<script type="module" nonce="{{NONCE}}" src="{{SCRIPT}}"></script>',
       () => `<script type="module">(()=>{${bridge.code}})();\n${js}</script>`);
   await fs.writeFile(process.argv[2], html);

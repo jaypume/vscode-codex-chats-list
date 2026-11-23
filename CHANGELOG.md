@@ -1,6 +1,15 @@
 # Changelog
 
-## [1.1.3](https://github.com/cixiangtao/codex-project-chats/compare/v1.1.2...v1.1.3) (2026-11-04)
+## 1.1.4
+
+### Changed
+
+- Align the source repository, package manifest, preview assets, and release tooling with the Codex Chats List listing.
+- Route support and private vulnerability reports to the fork.
+
+Release entries below document the upstream Codex Project Chats history.
+
+## [1.1.3](https://github.com/cixiangtao/codex-project-chats/compare/v1.1.2...5579d1cbf634423bf725ed9505d1bd8d86d2d047) (2026-11-04)
 
 ### Bug Fixes
 

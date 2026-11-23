@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Codex Project Chats. Keep changes focused on project grouping, search, and navigation back to the official Codex view. Discuss larger changes in an issue before implementing them.
+Thanks for helping improve Codex Chats List. Keep changes focused on project grouping, search, and navigation back to the official Codex view. Discuss larger changes in an issue before implementing them.
 
 ## Setup and checks
 
@@ -29,7 +29,7 @@ The Webview uses `app/` for composition and mounting, `host/` for the typed brid
 
 Run `pnpm dev` for the Vite browser preview at `http://127.0.0.1:5173/` (Simplified Chinese), or append `?lang=en`. React Fast Refresh and CSS hot updates are enabled. `webview/dev/` supplies synthetic metadata, a mock bridge, and VS Code-like theme variables; it is excluded from the production entry. The dev preview does not connect to the real app-server.
 
-Generate a portable sample-data interface preview with `pnpm run preview /tmp/codex-project-chats-preview.html`. Append `en` for English; the default is Simplified Chinese. The preview embeds the actual built browser bundle.
+Generate a portable sample-data interface preview with `pnpm run preview /tmp/codex-chats-list-preview.html`. Append `en` for English; the default is Simplified Chinese. The preview embeds the actual built browser bundle.
 
 To try the extension in VS Code, install a locally built VSIX in a separate VS Code profile with the official Codex extension installed and signed in. Use sample conversations and a disposable workspace when checking UI behavior.
 
@@ -37,7 +37,7 @@ To try the extension in VS Code, install a locally built VSIX in a separate VS C
 
 `test/live.mjs` reads real local metadata only when `CODEX_LIVE_BINARY` is explicitly set. It prints aggregate counts, not titles, paths, IDs, or transcripts. Run it only when you intend to grant access to that host's conversation history. It is not part of CI.
 
-`test/host.cjs` is an opt-in VS Code extension-host harness. It expects a separately prepared user-data directory at `PROJECT_CHATS_TEST_WORK/vscode-user`, a configured metadata fixture returning three current-project conversations, and an output directory at `PROJECT_CHATS_TEST_WORK`. Invoke it through VS Code's `--extensionTestsPath` with both this extension and the official extension available. Set `PROJECT_CHATS_TEST_THREAD` only to intentionally test a real local conversation route. The harness checks official logs and asserts that no conversation editor tab is created. Never use your normal profile or publish its logs. This harness is not a self-contained CI launcher. It retains `.cjs` because the VS Code test-host entry point loads its `run` export through CommonJS.
+`test/host.cjs` is an opt-in VS Code extension-host harness. It expects a separately prepared user-data directory at `CODEX_CHATS_LIST_TEST_WORK/vscode-user`, a configured metadata fixture returning three current-project conversations, and an output directory at `CODEX_CHATS_LIST_TEST_WORK`. Invoke it through VS Code's `--extensionTestsPath` with both this extension and the official extension available. Set `CODEX_CHATS_LIST_TEST_THREAD` only to intentionally test a real local conversation route. The harness checks official logs and asserts that no conversation editor tab is created. Never use your normal profile or publish its logs. This harness is not a self-contained CI launcher. It retains `.cjs` because the VS Code test-host entry point loads its `run` export through CommonJS.
 
 ## Pull requests
 

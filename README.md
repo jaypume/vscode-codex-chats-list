@@ -1,4 +1,4 @@
-# Codex Project Chats
+# Codex Chats List
 
 English · [简体中文](README.zh-CN.md)
 
@@ -6,17 +6,17 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 
 A small VS Code extension for developers who work across several repositories. It groups existing conversations by their working directory (`cwd`), without patching the official extension or implementing another chat client.
 
-> **Compatibility:** end-to-end verified on macOS Apple Silicon. Other platforms are not yet verified end to end. The interface follows the VS Code display language: Simplified Chinese for Chinese locales, English otherwise. This is an independent project, not an OpenAI product.
+> The upstream extension was tested end to end on macOS Apple Silicon. The interface follows the VS Code display language, with Simplified Chinese for Chinese locales and English for other locales. The extension is maintained independently of OpenAI.
 
 ## Install and use
 
 1. Install and sign in to the official [Codex extension](https://marketplace.visualstudio.com/items?itemName=openai.chatgpt).
-2. Find **Codex Project Chats** by publisher **cixiangtao**, or search `@id:cixiangtao.codex-project-chats` in VS Code. For an offline package, use **Extensions → … → Install from VSIX**.
-3. Open a project folder and select **Codex Project Chats** in the Activity Bar. You can also run **Codex Project Chats: Open Project Chats** from the Command Palette.
+2. Find **Codex Chats List** by publisher **pujie**, or search `@id:pujie.codex-chats-list` in VS Code. For an offline package, use **Extensions → … → Install from VSIX**.
+3. Open a project folder and select **Codex Chats List** in the Activity Bar. You can also run **Codex Chats List: Open Project Chats** from the Command Palette.
 4. Choose **Current project** or **All projects**. Search by title and expand a project to select a conversation.
 5. Continue in your existing official Codex view. If Codex is on the right, the conversation opens there without creating an editor tab.
 
-[Marketplace listing](https://marketplace.visualstudio.com/items?itemName=cixiangtao.codex-project-chats) · [Report a problem](https://github.com/cixiangtao/codex-project-chats/issues)
+[Marketplace listing](https://marketplace.visualstudio.com/items?itemName=pujie.codex-chats-list) · [Report a problem](https://github.com/jaypume/vscode-codex-chats-list/issues)
 
 Change the VS Code display language with **Configure Display Language**, then restart VS Code to apply it to the extension. Conversation titles and project paths remain in their original language.
 
@@ -38,11 +38,11 @@ The images show the English interface with sample data, not real conversation hi
 
 | Current project | All projects |
 | --- | --- |
-| ![Compact current-project conversation list with conversation recency](https://raw.githubusercontent.com/cixiangtao/codex-project-chats/main/docs/images/current-project-en.png) | ![Projects grouped by cwd, including identical folder names](https://raw.githubusercontent.com/cixiangtao/codex-project-chats/main/docs/images/all-projects-en.png) |
+| ![Compact current-project conversation list with conversation recency](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/current-project-en.png) | ![Projects grouped by cwd, including identical folder names](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/all-projects-en.png) |
 
 Hover details show the full title, conversation recency, and path while leaving the left side available for switching rows:
 
-![Compact right-aligned hover details with a clear pointer lane on the left](https://raw.githubusercontent.com/cixiangtao/codex-project-chats/main/docs/images/hover-details-en.png)
+![Compact right-aligned hover details with a clear pointer lane on the left](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/hover-details-en.png)
 
 ## What it does
 
@@ -66,7 +66,7 @@ With no folder open, select **All projects** to browse all projects. Scope selec
 | WSL, SSH, or a container | Install both extensions in that remote workspace. Cross-host histories are not combined. Remote behavior is not yet verified end to end. |
 | Windows forwarding Codex to WSL from a local window | Open the project in a WSL window instead. This mixed-host mode is unsupported. |
 
-The manifest requires VS Code 1.100 or newer. The tested baseline was VS Code 1.143.1 with `openai.chatgpt` 26.1021.22027 on macOS Apple Silicon; it is evidence for that combination, not a promise about every upstream version.
+The manifest requires VS Code 1.100 or newer. Upstream tested VS Code 1.143.1 with `openai.chatgpt` 26.1021.22027 on macOS Apple Silicon.
 
 ## Privacy and integration boundary
 
@@ -74,7 +74,7 @@ The extension starts the official bundled `codex app-server` over local stdio an
 
 Navigation uses `vscode.env.asExternalUri` and the official extension's `/local/<id>` URI handler to target the current window and reveal the existing sidebar. That upstream URI route is not a stable public API. Project grouping is a navigation feature, not an access-control boundary.
 
-If you installed the prototype as `ikun-local.codex-project-chats`, uninstall it before installing `cixiangtao.codex-project-chats` to avoid duplicate views. Uninstalling this extension does not delete Codex conversations.
+Disable the upstream extension or its local prototype before enabling Codex Chats List to avoid duplicate views. Codex stores conversations independently of both extensions.
 
 ## Development
 
@@ -89,20 +89,18 @@ pnpm test
 pnpm run package
 ```
 
-Vitest runs TypeScript tests directly against the source; `pnpm run check` checks extension, test, and Webview types. Use `pnpm run test:watch` while developing. The extension host compiles to CommonJS in `dist/extension/`; the React and TypeScript interface in `webview/src/` is built with Vite into `dist/webview/`. `media/` contains icons. Frontend components, hooks, feature styles, and colocated tests are organized by responsibility; see [the Webview guide](https://github.com/cixiangtao/codex-project-chats/blob/main/webview/README.md). Oxlint and Oxfmt checks run in CI.
+Vitest runs TypeScript tests directly against the source; `pnpm run check` checks extension, test, and Webview types. Use `pnpm run test:watch` while developing. The extension host compiles to CommonJS in `dist/extension/`; the React and TypeScript interface in `webview/src/` is built with Vite into `dist/webview/`. `media/` contains icons. Frontend components, hooks, feature styles, and colocated tests are organized by responsibility; see [the Webview guide](https://github.com/jaypume/vscode-codex-chats-list/blob/main/webview/README.md). Oxlint and Oxfmt checks run in CI.
 
 Run `pnpm dev` for the local interface preview with React Fast Refresh at `http://127.0.0.1:5173/`. It uses synthetic data; append `?lang=en` for English. The installed extension loads the packaged Vite assets through the VS Code Webview API.
 
-The VSIX is generated as `release-artifact/codex-project-chats-<version>.vsix`. The directory is created automatically and ignored by Git. React and React DOM are bundled into the browser entry; only built code, local media, and public documentation are packaged, with no `node_modules/` directory. This is a VS Code extension, not an npm library (`private: true` prevents accidental npm publication).
+The VSIX is generated as `release-artifact/codex-chats-list-<version>.vsix`. The directory is created automatically and ignored by Git. React and React DOM are bundled into the browser entry; only built code, local media, and public documentation are packaged, with no `node_modules/` directory. This is a VS Code extension, not an npm library (`private: true` prevents accidental npm publication).
 
-CI runs the tests on Linux, macOS, and Windows and inspects a VSIX on Linux. One POSIX executable fixture is explicitly skipped on Windows. These checks do not replace a real VS Code/official Codex integration test. Live-history and extension-host tests are opt-in; see [CONTRIBUTING.md](https://github.com/cixiangtao/codex-project-chats/blob/main/CONTRIBUTING.md).
+CI runs the tests on Linux, macOS, and Windows and inspects a VSIX on Linux. One POSIX executable fixture is explicitly skipped on Windows. These checks do not replace a real VS Code/official Codex integration test. Live-history and extension-host tests are opt-in; see [CONTRIBUTING.md](https://github.com/jaypume/vscode-codex-chats-list/blob/main/CONTRIBUTING.md).
 
-Repository documentation and metadata may be ahead of the last Marketplace package; editing this repository does not update an already uploaded VSIX. release-it prepares the version and changelog locally; Marketplace packages are uploaded manually after CI passes, then verified before tagging. See the [release procedure](https://github.com/cixiangtao/codex-project-chats/blob/main/docs/releasing.md). No GitHub Release or npm package is created.
+Repository documentation and metadata may be ahead of the last Marketplace package; editing this repository does not update an already uploaded VSIX. release-it prepares the version and changelog locally; Marketplace packages are uploaded manually after CI passes, then verified before tagging. See the [release procedure](https://github.com/jaypume/vscode-codex-chats-list/blob/main/docs/releasing.md). No GitHub Release or npm package is created.
 
 ## Support and license
 
-Use [Issues](https://github.com/cixiangtao/codex-project-chats/issues) for bugs and scoped feature requests. Follow [SECURITY.md](https://github.com/cixiangtao/codex-project-chats/blob/main/SECURITY.md) for private vulnerability reports. See [SUPPORT.md](https://github.com/cixiangtao/codex-project-chats/blob/main/SUPPORT.md) for safe diagnostics.
+Use [Issues](https://github.com/jaypume/vscode-codex-chats-list/issues) for bugs and scoped feature requests. Follow [SECURITY.md](https://github.com/jaypume/vscode-codex-chats-list/blob/main/SECURITY.md) for private vulnerability reports. See [SUPPORT.md](https://github.com/jaypume/vscode-codex-chats-list/blob/main/SUPPORT.md) for safe diagnostics.
 
-[MIT](https://github.com/cixiangtao/codex-project-chats/blob/main/LICENSE). Independently implemented; no History Viewer source code was copied.
-
-The custom icon combines the blossom used by the official Codex extension with a project-folder badge. OpenAI and Codex marks belong to OpenAI; the icon does not indicate affiliation or endorsement.
+[MIT](https://github.com/jaypume/vscode-codex-chats-list/blob/main/LICENSE). This extension is a fork of [Codex Project Chats](https://github.com/cixiangtao/codex-project-chats).
