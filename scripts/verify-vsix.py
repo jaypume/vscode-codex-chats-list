@@ -19,6 +19,8 @@ with ZipFile(archive) as package:
     assert len(views) == 1 and views[0]["id"] == "codexChatsList.list" and views[0]["type"] == "tree"
     for name in ("extension/readme.md", "extension/changelog.md", "extension/LICENSE.txt",
                  "extension/README.zh-CN.md", "extension/SUPPORT.md", "extension/media/icon.png",
+                 "extension/media/current-check.png", "extension/media/pinned-star.png",
+                 "extension/media/fluent-emoji-license.txt",
                  "extension/dist/extension/extension.js", "extension/dist/extension/tree.js",
                  "extension/dist/extension/history.js", "extension/dist/extension/history-store.js",
                  "extension/dist/extension/item-flags.js", "extension/dist/extension/repositories.js",

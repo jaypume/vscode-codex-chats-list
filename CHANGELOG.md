@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.13.1
+
+### Changed
+
+- Remove the conversation count badge from the Activity Bar icon.
+- Mark the current project with ✅ and pinned projects and conversations with ⭐.
+
+## 1.13.0
+
+### Changed
+
+- Display project conversation counts before activity dates in the right-hand badge area, capping the displayed count at 99.
+- Show older activity as elapsed calendar months or years.
+
+## 1.12.2
+
+### Changed
+
+- Show the latest conversation date in each project's right-hand badge and move the conversation count next to the project name.
+
+## 1.12.1
+
+### Changed
+
+- Use theme-aware icon colors to distinguish regular, current, pinned, and unverified project rows. Pinned conversations share the project pin color.
+
 ## 1.12.0
 
 ### Changed

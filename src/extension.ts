@@ -12,7 +12,7 @@ import { openInCodex } from './routing';
 import {
   filterTitles, groupChats, pathKey, selectChats, uniquePaths, type Chat, type Grouping, type GroupOrder, type Scope, type WorkspaceProjects,
 } from './model';
-import { ChatTree, LOAD_MORE, OPEN_CONVERSATION, VIEW_ID, type TreeNode } from './tree';
+import { ChatTree, LOAD_MORE, OPEN_CONVERSATION, projectCountDecorations, VIEW_ID, type TreeNode } from './tree';
 
 const t = createLocalizer(vscode.env.language);
 const OFFICIAL_ID = 'openai.chatgpt';
@@ -117,7 +117,7 @@ class CodexChatsListView implements vscode.Disposable {
     this.pins = new ItemFlags(storage, 'pins-v1');
     this.hidden = new ItemFlags(storage, 'hidden-v1');
     this.repositories = new RepositoryCatalog(context.globalStorageUri?.fsPath);
-    this.tree = new ChatTree(context.workspaceState, id => ({
+    this.tree = new ChatTree(context.workspaceState, context.extensionUri, id => ({
       pinned: this.pins.has('chat', id),
       hidden: this.hidden.has('chat', id),
       assignedRepository: this.assignmentLabel(id),
@@ -631,7 +631,7 @@ class CodexChatsListView implements vscode.Disposable {
       const chats = hidden ? (this.hiddenOnly ? group.chats : [])
         : group.chats.filter(chat => this.hidden.has('chat', chat.id) === this.hiddenOnly);
       const pinned = this.pins.has('project', group.key, group.preferenceAliases);
-      return chats.length ? [{ ...group, chats, pinned, hidden }] : [];
+      return chats.length ? [{ ...group, chats, pinned, hidden, latestConversationAt: chats[0]!.recencyAt }] : [];
     });
     const eligibleCount = groups.reduce((sum, group) => sum + group.chats.length, 0);
     let visible = groups;
@@ -645,7 +645,6 @@ class CodexChatsListView implements vscode.Disposable {
       });
     }
     const count = visible.reduce((sum, group) => sum + group.chats.length, 0);
-    this.view.badge = count ? { value: count, tooltip: t(count === 1 ? 'loadedOne' : 'loadedOther', { count }) } : undefined;
     if (this.error) this.view.message = this.error;
     else if (this.scope === 'current' && !this.projects.roots.length) this.view.message = undefined;
     else {
@@ -707,6 +706,8 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(provider,
     view,
     vscode.window.registerFileDecorationProvider(provider.tree),
+    // VS Code joins decoration text in reverse registration order, with the count first.
+    vscode.window.registerFileDecorationProvider(projectCountDecorations),
     vscode.commands.registerCommand('codexChatsList.open', () => vscode.commands.executeCommand(`${VIEW_ID}.focus`)),
     vscode.commands.registerCommand('codexChatsList.refresh', () => provider.refresh()),
     vscode.commands.registerCommand('codexChatsList.selectScope', () => provider.pickScope()),

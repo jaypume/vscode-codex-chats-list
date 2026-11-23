@@ -8,16 +8,23 @@ export const VIEW_ID = 'codexChatsList.list';
 export const OPEN_CONVERSATION = 'codexChatsList.openConversation';
 export const LOAD_MORE = 'codexChatsList.loadMore';
 const AUTO_EXPAND_LIMIT = 50;
-const COUNT_SCHEME = 'codex-chats-list-count';
 const DATE_SCHEME = 'codex-chats-list-date';
+const PROJECT_ACTIVITY_PATH = '/project/';
 const MAX_BADGE_COUNT = 99;
-// A folder-shaped codicon keeps rendering when a synthetic resource supplies the count badge.
-const folderIcon = new vscode.ThemeIcon('symbol-folder');
+const mutedIconColor = new vscode.ThemeColor('descriptionForeground');
+// A folder-shaped codicon keeps rendering when a synthetic resource supplies the date badge.
+const folderIcon = new vscode.ThemeIcon(
+  'symbol-folder',
+  new vscode.ThemeColor('textLink.foreground'),
+);
+const unknownFolderIcon = new vscode.ThemeIcon('symbol-folder', mutedIconColor);
+const hiddenProjectIcon = new vscode.ThemeIcon('eye-closed', mutedIconColor);
 const blankIcon = new vscode.ThemeIcon('blank');
 
 type ProjectNode = {
   kind: 'project';
   group: ProjectGroup;
+  latestConversationAt: number;
   qualifier?: string;
   filtered: boolean;
   expanded: boolean;
@@ -44,6 +51,15 @@ const exactTime = new Intl.DateTimeFormat(locale, {
 function conversationCount(count: number): string {
   return t(count === 1 ? 'chatsOne' : 'chatsOther', { count });
 }
+
+export const projectCountDecorations = {
+  provideFileDecoration(uri: vscode.Uri) {
+    if (uri.scheme !== DATE_SCHEME || !uri.path.startsWith(PROJECT_ACTIVITY_PATH)) return undefined;
+    const count = Number(uri.path.slice(PROJECT_ACTIVITY_PATH.length));
+    if (!Number.isSafeInteger(count) || count < 1) return undefined;
+    return new vscode.FileDecoration(String(Math.min(count, MAX_BADGE_COUNT)));
+  },
+} satisfies vscode.FileDecorationProvider;
 
 function projectQualifiers(groups: ProjectGroup[]): Map<string, string> {
   const byName = new Map<string, ProjectGroup[]>();
@@ -81,22 +97,27 @@ export class ChatTree
   private readonly changes = new vscode.EventEmitter<TreeNode | undefined>();
   readonly onDidChangeTreeData = this.changes.event;
   private readonly expansion: Map<string, boolean>;
+  private readonly currentIcon: vscode.Uri;
+  private readonly pinnedIcon: vscode.Uri;
   private nodes: TreeNode[] = [];
   private opening: string | null = null;
   private showBadges = true;
 
   constructor(
     private readonly state: vscode.Memento,
+    extensionUri: vscode.Uri,
     private readonly chatFlags: (id: string) => ChatFlags,
   ) {
     this.expansion = new Map(
       Object.entries(state.get<Record<string, boolean>>('projectExpansion', {})),
     );
+    this.currentIcon = vscode.Uri.joinPath(extensionUri, 'media', 'current-check.png');
+    this.pinnedIcon = vscode.Uri.joinPath(extensionUri, 'media', 'pinned-star.png');
     this.updateBadgeSetting();
   }
 
   update(
-    groups: (ProjectGroup & { pinned: boolean; hidden: boolean })[],
+    groups: (ProjectGroup & { pinned: boolean; hidden: boolean; latestConversationAt: number })[],
     scope: Scope,
     filtered: boolean,
     more: boolean,
@@ -109,6 +130,7 @@ export class ChatTree
     this.nodes = groups.map((group) => ({
       kind: 'project',
       group,
+      latestConversationAt: group.latestConversationAt,
       qualifier: qualifiers.get(group.key),
       filtered,
       pinned: group.pinned,
@@ -144,18 +166,28 @@ export class ChatTree
   }
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
-    if (uri.scheme === DATE_SCHEME) {
-      return /^(?:[0-7]d|[1-4]w)$/.test(uri.query)
-        ? new vscode.FileDecoration(uri.query)
-        : undefined;
+    if (uri.scheme !== DATE_SCHEME || !/^(?:[0-7]d|[1-4]w|[1-9][my])$/.test(uri.query)) {
+      return undefined;
     }
-    if (uri.scheme !== COUNT_SCHEME) return undefined;
-    const count = Number(uri.query);
-    if (!Number.isSafeInteger(count) || count < 1) return undefined;
-    return new vscode.FileDecoration(
-      String(Math.min(count, MAX_BADGE_COUNT)),
-      conversationCount(count),
-    );
+    return new vscode.FileDecoration(uri.query);
+  }
+
+  private setActivityBadges(item: vscode.TreeItem, recencyAt: number, chatCount?: number) {
+    const date = new Date(recencyAt > 0 ? recencyAt * 1000 : NaN);
+    const activity = formatConversationDate(date);
+    const relative = this.showBadges ? activity?.relative : undefined;
+    const badge = relative?.length === 2 ? relative : undefined;
+    if (this.showBadges && (badge || chatCount !== undefined)) {
+      item.resourceUri = vscode.Uri.from({
+        scheme: DATE_SCHEME,
+        path: chatCount === undefined ? '/conversation' : PROJECT_ACTIVITY_PATH + chatCount,
+        query: badge ?? '',
+      });
+    }
+    return {
+      inlineDate: badge ? undefined : (relative ?? activity?.text),
+      timestamp: activity ? exactTime.format(date) : undefined,
+    };
   }
 
   getChildren(node?: TreeNode): TreeNode[] {
@@ -190,26 +222,26 @@ export class ChatTree
           : vscode.TreeItemCollapsibleState.Collapsed,
       );
       item.id = `${prefix}project:${group.key}`;
-      item.iconPath = node.hidden
-        ? new vscode.ThemeIcon('eye-closed')
-        : node.pinned
-          ? new vscode.ThemeIcon('pinned')
+      const projectIcon = group.current
+        ? this.currentIcon
+        : group.unknown
+          ? unknownFolderIcon
           : folderIcon;
+      item.iconPath = node.hidden ? hiddenProjectIcon : node.pinned ? this.pinnedIcon : projectIcon;
       item.contextValue = (node.pinned ? 'pinnedProject' : 'project') + hidden;
       const count = conversationCount(group.chats.length);
-      const badge = this.showBadges;
-      if (badge) {
-        item.resourceUri = vscode.Uri.from({
-          scheme: COUNT_SCHEME,
-          path: `/${group.name}`,
-          query: String(group.chats.length),
-        });
-      }
+      const { inlineDate, timestamp } = this.setActivityBadges(
+        item,
+        node.latestConversationAt,
+        group.chats.length,
+      );
+      const latestConversation = timestamp && `${t('recentConversation')}: ${timestamp}`;
       item.description = [
-        !badge && count,
+        !this.showBadges && count,
         node.qualifier,
         group.current && t('currentBadge'),
         group.unknown && t('unknownSource'),
+        inlineDate,
       ]
         .filter(Boolean)
         .join(' · ');
@@ -217,6 +249,7 @@ export class ChatTree
         group.repository,
         group.cwd !== group.repository && group.cwd,
         count,
+        latestConversation,
         node.pinned && t('pinnedLabel'),
         node.hidden && t('hiddenLabel'),
       ]
@@ -226,6 +259,7 @@ export class ChatTree
         label: [
           group.name,
           count,
+          latestConversation,
           node.qualifier,
           group.current && t('currentBadge'),
           group.unknown && t('unknownSource'),
@@ -238,27 +272,18 @@ export class ChatTree
       return item;
     }
     const { chat } = node;
-    const date = new Date(chat.recencyAt > 0 ? chat.recencyAt * 1000 : NaN);
-    const displayDate = formatConversationDate(date);
     const item = new vscode.TreeItem(chat.title);
     item.id = `${prefix}chat:${chat.id}`;
     item.contextValue =
       (node.pinned ? 'pinnedChat' : 'chat') + hidden + (node.assignedRepository ? '.assigned' : '');
     const opening = this.opening === chat.id;
-    const badge = this.showBadges ? displayDate?.badge : undefined;
-    if (badge) {
-      item.resourceUri = vscode.Uri.from({
-        scheme: DATE_SCHEME,
-        path: '/conversation',
-        query: badge,
-      });
-    }
-    item.description = opening ? t('opening') : badge ? undefined : displayDate?.text;
+    const activity = this.setActivityBadges(item, chat.recencyAt);
+    item.description = opening ? t('opening') : activity.inlineDate;
     if (opening) item.iconPath = new vscode.ThemeIcon('loading~spin');
     else if (node.hidden) item.iconPath = new vscode.ThemeIcon('eye-closed');
-    else if (node.pinned) item.iconPath = new vscode.ThemeIcon('pinned');
+    else if (node.pinned) item.iconPath = this.pinnedIcon;
     else item.iconPath = blankIcon;
-    const timestamp = displayDate ? exactTime.format(date) : t('unknownTime');
+    const timestamp = activity.timestamp ?? t('unknownTime');
     item.tooltip = [
       chat.title,
       `${t('recentConversation')}: ${timestamp}`,

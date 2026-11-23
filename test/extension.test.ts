@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import type { Directory, WorkspaceRepository } from '../src/git';
 import type { Chat, ChatPage, Grouping, GroupOrder, Scope } from '../src/model';
-import type { ChatTree, TreeNode } from '../src/tree';
+import { projectCountDecorations, type ChatTree, type TreeNode } from '../src/tree';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn<(roots: string[] | undefined, search: string, cursor: string | null) => Promise<ChatPage>>(),
@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   updateScope: vi.fn<(key: string, value: unknown) => Promise<void>>(),
   cliPath: undefined as string | undefined,
   legacyCliPath: '/fixture/codex',
-  countBadges: true,
+  dateBadges: true,
 }));
 vi.mock('../src/client', () => ({ CodexClient: class {
   constructor(...args: unknown[]) { mocks.construct(...args); }
@@ -48,7 +48,7 @@ vi.mock('vscode', () => ({
     workspaceFolders: [{ uri: { scheme: 'file', fsPath: '/fixture' } }],
     getConfiguration: (section: string) => ({
       get: () => section === 'codexProjectChats' ? mocks.legacyCliPath
-        : section === 'explorer.decorations' ? mocks.countBadges : false,
+        : section === 'explorer.decorations' ? mocks.dateBadges : false,
       inspect: () => ({ globalValue: mocks.cliPath, defaultValue: '' }),
     }),
     onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
@@ -75,14 +75,20 @@ vi.mock('vscode', () => ({
   TreeItem: class {
     constructor(readonly label: string, readonly collapsibleState = 0) {}
   },
-  Uri: { from: (value: unknown) => value },
+  Uri: {
+    from: (value: unknown) => value,
+    joinPath: (base: { path: string }, ...segments: string[]) => ({ path: [base.path, ...segments].join('/') }),
+  },
   FileDecoration: class {
     constructor(readonly badge: string, readonly tooltip: string) {}
   },
   TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+  ThemeColor: class {
+    constructor(readonly id: string) {}
+  },
   ThemeIcon: class {
     static readonly Folder = { id: 'folder' };
-    constructor(readonly id: string) {}
+    constructor(readonly id: string, readonly color?: vscode.ThemeColor) {}
   },
 }));
 import { activate } from '../src/extension';
@@ -119,6 +125,7 @@ const page = (id: string): ChatPage => ({ chats: [{ id, cwd: '/fixture', title: 
 async function setup(saved?: Scope | 'repository') {
   const context = {
     extension: { packageJSON: { version: '3.2.1' } },
+    extensionUri: { path: '/extension' },
     subscriptions: disposables,
     workspaceState: { get: (key: string, fallback: unknown) => key === 'scope' ? saved : fallback, update: mocks.updateScope },
   } as unknown as vscode.ExtensionContext;
@@ -198,7 +205,7 @@ beforeEach(() => {
   mocks.registerCommand.mockReturnValue({ dispose() {} });
   mocks.updateScope.mockReset().mockResolvedValue(undefined);
   mocks.cliPath = undefined;
-  mocks.countBadges = true;
+  mocks.dateBadges = true;
   mocks.legacyCliPath = '/fixture/codex';
 });
 afterEach(() => {
@@ -243,9 +250,16 @@ test('each range, grouping, title search and folder filter uses the same indexed
   const ids = () => fixture.tree.getChildren().flatMap(node => node.kind === 'project' ? node.group.chats.map(chat => chat.id) : []);
   expect(fixture.api.snapshot()).toMatchObject({ scope: 'current', grouping: 'repository', indexed: true });
   expect(ids()).toEqual(['thread-folder', 'thread-fork', 'thread-upstream']);
+  expect(fixture.tree.getTreeItem(fixture.tree.getChildren()[0]!).iconPath).toMatchObject({
+    path: '/extension/media/current-check.png',
+  });
   await fixture.pick('all');
   expect(ids()).toContain('thread-local');
   expect(ids()).toContain('thread-unknown');
+  const unknown = fixture.tree.getChildren().find(node => node.kind === 'project' && node.group.unknown);
+  expect(fixture.tree.getTreeItem(unknown!).iconPath).toMatchObject({
+    id: 'symbol-folder', color: { id: 'descriptionForeground' },
+  });
   await fixture.run('toggleFolders');
   expect(ids()).not.toContain('thread-folder');
   expect(ids()).toContain('thread-unknown');
@@ -358,10 +372,11 @@ test('local pagination preserves cached results without touching the Codex conne
   });
   const fixture = await setup();
   await fixture.ready();
-  expect(fixture.view.badge?.value).toBe(50);
+  const visibleChats = () => fixture.tree.getChildren().flatMap(node => fixture.tree.getChildren(node));
+  expect(visibleChats()).toHaveLength(50);
   expect(fixture.tree.getChildren().at(-1)?.kind).toBe('more');
   await fixture.run('loadMore');
-  expect(fixture.view.badge?.value).toBe(60);
+  expect(visibleChats()).toHaveLength(60);
   expect(mocks.list).toHaveBeenCalledOnce();
 });
 
@@ -435,7 +450,7 @@ test('repository deletion covers hidden and filtered conversations and leaves fa
   const root = () => fixture.tree.getChildren()[0]!;
   await fixture.run('hide', fixture.tree.getChildren(root())[1]);
   await fixture.search('match');
-  expect(fixture.view.badge?.value).toBe(1);
+  expect(fixture.tree.getChildren(root())).toHaveLength(1);
   mocks.showWarning.mockImplementationOnce(async (_message, _options, _cancel, confirm) => confirm);
   await fixture.run('delete', root());
   expect(mocks.showWarning.mock.calls[0]?.[0]).toContain('52 conversations');
@@ -448,8 +463,10 @@ test('repository deletion covers hidden and filtered conversations and leaves fa
 });
 
 test('All lists every cached repository and chat, sorts groups, and pins without requerying Codex', async () => {
-  const chat = (id: string, repo: string, recencyAt: number): Chat =>
-    ({ id, title: id, cwd: '/repos/' + repo, repository: 'github.com/example/' + repo, recencyAt });
+  vi.setSystemTime(new Date(2026, 10, 23, 12));
+  const yesterday = new Date(2026, 10, 22, 12).getTime() / 1000;
+  const chat = (id: string, repo: string, offset: number): Chat =>
+    ({ id, title: id, cwd: '/repos/' + repo, repository: 'github.com/example/' + repo, recencyAt: yesterday + offset });
   mocks.list.mockResolvedValueOnce({
     chats: [
       ...Array.from({ length: 105 }, (_, i) => chat('noise-' + i, 'noise', 1000 - i)),
@@ -467,7 +484,8 @@ test('All lists every cached repository and chat, sorts groups, and pins without
   const title = (node: TreeNode) => node.kind === 'chat' ? node.chat.title : fixture.tree.getTreeItem(node).label;
   expect(roots()).toHaveLength(58);
   expect(roots().every(node => node.kind === 'project')).toBe(true);
-  expect(fixture.view.badge?.value).toBe(163);
+  expect(roots().flatMap(node => fixture.tree.getChildren(node))).toHaveLength(163);
+  expect(fixture.view.badge).toBeUndefined();
   const noise = roots()[0]!;
   expect(title(noise)).toBe('noise');
   expect(fixture.tree.getChildren(noise)).toHaveLength(105);
@@ -475,10 +493,8 @@ test('All lists every cached repository and chat, sorts groups, and pins without
   expect(largeProject.description).toBe('');
   expect(largeProject.tooltip).toContain('105 chats');
   expect(largeProject.accessibilityInformation?.label).toContain('105 chats');
-  expect(fixture.tree.provideFileDecoration(largeProject.resourceUri!)).toMatchObject({
-    badge: '99',
-    tooltip: '105 chats',
-  });
+  expect(projectCountDecorations.provideFileDecoration(largeProject.resourceUri!)?.badge).toBe('99');
+  expect(fixture.tree.provideFileDecoration(largeProject.resourceUri!)?.badge).toBe('1d');
   expect(title(roots().at(-1)!)).toBe('alpha');
   await fixture.search('noise');
   expect(roots()).toHaveLength(1);
@@ -490,23 +506,32 @@ test('All lists every cached repository and chat, sorts groups, and pins without
   const [alpha, beta] = roots();
   expect(roots().slice(0, 3).map(title)).toEqual(['alpha', 'beta', 'noise']);
   const item = fixture.tree.getTreeItem(alpha!);
-  expect(fixture.tree.provideFileDecoration(item.resourceUri!)).toMatchObject({ badge: '2', tooltip: '2 chats' });
+  expect(item.iconPath).toMatchObject({ id: 'symbol-folder', color: { id: 'textLink.foreground' } });
+  expect(item.description).toBe('');
+  expect(projectCountDecorations.provideFileDecoration(item.resourceUri!)?.badge).toBe('2');
+  expect(fixture.tree.provideFileDecoration(item.resourceUri!)?.badge).toBe('1d');
   expect(item.accessibilityInformation?.label).toContain('2 chats');
-  mocks.countBadges = false;
+  mocks.dateBadges = false;
   fixture.tree.updateBadgeSetting();
-  expect(fixture.tree.getTreeItem(noise).description).toBe('105 chats');
-  expect(fixture.tree.getTreeItem(alpha!).description).toBe('2 chats');
+  expect(fixture.tree.getTreeItem(noise).description).toBe('105 chats · 11-22');
+  expect(fixture.tree.getTreeItem(alpha!).description).toBe('2 chats · 11-22');
   expect(fixture.tree.getTreeItem(alpha!).resourceUri).toBeUndefined();
-  mocks.countBadges = true;
+  mocks.dateBadges = true;
   fixture.tree.updateBadgeSetting();
   expect(mocks.updateScope).toHaveBeenLastCalledWith('historyView', expect.objectContaining({ order: 'name' }));
   await fixture.run('pin', beta);
   expect(roots().slice(0, 3).map(title)).toEqual(['beta', 'alpha', 'noise']);
-  expect(fixture.tree.getTreeItem(roots()[0]!)).toMatchObject({ contextValue: 'pinnedProject', iconPath: { id: 'pinned' } });
+  expect(fixture.tree.getTreeItem(roots()[0]!)).toMatchObject({
+    contextValue: 'pinnedProject',
+    iconPath: { path: '/extension/media/pinned-star.png' },
+  });
   const [, old] = fixture.tree.getChildren(alpha);
   await fixture.run('pin', old);
   expect(fixture.tree.getChildren(roots()[1]!).map(title)).toEqual(['old-session', 'recent-session']);
-  expect(fixture.tree.getTreeItem(fixture.tree.getChildren(roots()[1]!)[0]!)).toMatchObject({ contextValue: 'pinnedChat' });
+  expect(fixture.tree.getTreeItem(fixture.tree.getChildren(roots()[1]!)[0]!)).toMatchObject({
+    contextValue: 'pinnedChat',
+    iconPath: { path: '/extension/media/pinned-star.png' },
+  });
   await fixture.search('recent');
   expect(roots().map(title)).toEqual(['alpha']);
   expect(fixture.tree.getChildren(roots()[0]!).map(title)).toEqual(['recent-session']);
@@ -614,20 +639,21 @@ test('validates the selected ID before navigating and removes a confirmed archiv
   expect(mocks.openConversation).toHaveBeenCalledTimes(1);
 });
 
-test('date badges keep titles searchable and refresh once at local midnight', async () => {
+test('project and conversation dates use the latest visible activity and refresh at local midnight', async () => {
   vi.setSystemTime(new Date(2026, 10, 23, 23, 58));
   const preview = page('thread-default');
   preview.chats[0]!.recencyAt = new Date(2026, 10, 22, 12).getTime() / 1000;
   preview.chats.push(
     { id: 'thread-in-year', cwd: '/fixture', title: 'Earlier', recencyAt: new Date(2026, 10, 12).getTime() / 1000 },
     { id: 'thread-in-october', cwd: '/fixture', title: 'October', recencyAt: new Date(2026, 9, 19).getTime() / 1000 },
+    { id: 'thread-ten-months', cwd: '/fixture', title: 'January', recencyAt: new Date(2026, 0, 23).getTime() / 1000 },
     { id: 'thread-lastyear', cwd: '/fixture', title: 'Last year', recencyAt: new Date(2025, 9, 27).getTime() / 1000 },
     { id: 'thread-undated', cwd: '/fixture', title: 'Undated', recencyAt: 0 },
   );
   mocks.list.mockResolvedValue(preview);
   const fixture = await setup();
   await fixture.ready();
-  const [dated, older, october, lastYear, undated] = fixture.tree.getChildren(fixture.tree.getChildren()[0]);
+  const [dated, older, october, january, lastYear, undated] = fixture.tree.getChildren(fixture.tree.getChildren()[0]);
   const item = fixture.tree.getTreeItem(dated!);
   expect(item).toMatchObject({
     label: 'thread-default',
@@ -639,14 +665,22 @@ test('date badges keep titles searchable and refresh once at local midnight', as
   expect(fixture.tree.provideFileDecoration(item.resourceUri!)?.badge).toBe('1d');
   const olderUri = fixture.tree.getTreeItem(older!).resourceUri!;
   expect(fixture.tree.provideFileDecoration(olderUri)?.badge).toBe('1w');
-  expect(fixture.tree.getTreeItem(october!).description).toBe('2026-10-19');
-  expect(fixture.tree.getTreeItem(october!).resourceUri).toBeUndefined();
+  expect(fixture.tree.provideFileDecoration(fixture.tree.getTreeItem(october!).resourceUri!)?.badge).toBe('1m');
+  expect(fixture.tree.getTreeItem(january!).description).toBe('10m');
+  expect(fixture.tree.getTreeItem(january!).resourceUri).toBeUndefined();
   const lastYearItem = fixture.tree.getTreeItem(lastYear!);
-  expect(lastYearItem.description).toBe('2025-10-27');
-  expect(lastYearItem.resourceUri).toBeUndefined();
+  expect(lastYearItem.description).toBeUndefined();
+  expect(fixture.tree.provideFileDecoration(lastYearItem.resourceUri!)?.badge).toBe('1y');
   const undatedItem = fixture.tree.getTreeItem(undated!);
   expect(undatedItem.label).toBe('Undated');
   expect(undatedItem.description).toBeUndefined();
+  const projectItem = () => fixture.tree.getTreeItem(fixture.tree.getChildren()[0]!);
+  await fixture.run('pin', lastYear);
+  expect(fixture.tree.getChildren(fixture.tree.getChildren()[0])[0]).toMatchObject({ chat: { id: 'thread-lastyear' } });
+  expect(projectItem().description).toBe('Current');
+  expect(projectCountDecorations.provideFileDecoration(projectItem().resourceUri!)?.badge).toBe('6');
+  expect(projectItem().tooltip).toContain('Recent conversation: 11/22/2026, 12:00');
+  expect(fixture.tree.provideFileDecoration(projectItem().resourceUri!)?.badge).toBe('1d');
   await fixture.search('1d');
   expect(fixture.tree.getChildren()).toEqual([]);
   await fixture.run('clearSearch');
@@ -656,8 +690,10 @@ test('date badges keep titles searchable and refresh once at local midnight', as
   await vi.advanceTimersByTimeAsync(60_000);
   expect(fixture.rendered).toHaveBeenCalledTimes(checks + 1);
   expect(fixture.tree.provideFileDecoration(fixture.tree.getTreeItem(dated!).resourceUri!)?.badge).toBe('2d');
-  mocks.countBadges = false;
+  expect(fixture.tree.provideFileDecoration(projectItem().resourceUri!)?.badge).toBe('2d');
+  mocks.dateBadges = false;
   fixture.tree.updateBadgeSetting();
   expect(fixture.tree.getTreeItem(dated!).description).toBe('11-22');
   expect(fixture.tree.getTreeItem(dated!).resourceUri).toBeUndefined();
+  expect(projectItem().description).toBe('6 chats · Current · 11-22');
 });
