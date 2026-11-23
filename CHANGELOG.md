@@ -5,6 +5,8 @@
 ### Changed
 
 - Show every indexed conversation in Current project as background indexing makes results available.
+- Pair the Codex mark with a list symbol in the extension and Activity Bar icons.
+- Use ➡️ for the current project.
 
 ## 1.13.2
 

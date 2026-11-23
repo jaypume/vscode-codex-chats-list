@@ -80,6 +80,7 @@
           "type": "tree",
           "id": "codexChatsList.list",
           "name": "%view.title%",
+          "icon": "media/projects.svg",
           "contextualTitle": "Codex Chats List"
         }
       ]

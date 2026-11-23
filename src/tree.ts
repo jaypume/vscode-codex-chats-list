@@ -107,7 +107,7 @@ export class ChatTree
     this.expansion = new Map(
       Object.entries(state.get<Record<string, boolean>>('projectExpansion', {})),
     );
-    this.currentIcon = vscode.Uri.joinPath(extensionUri, 'media', 'current-check.png');
+    this.currentIcon = vscode.Uri.joinPath(extensionUri, 'media', 'current-arrow.png');
     this.pinnedIcon = vscode.Uri.joinPath(extensionUri, 'media', 'pinned-star.png');
     this.updateBadgeSetting();
   }

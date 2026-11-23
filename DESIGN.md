@@ -6,7 +6,9 @@
 
 项目和会话的右侧徽标显示相对时间。项目取当前范围和筛选下最新会话的时间。按扩展宿主的本地日历，距今 0 至 7 天显示 `0d` 至 `7d`，距今 8 至 34 天显示 `1w` 至 `4w`，之后显示完整日历月数或年数。超过两个字符的时间（如 `10m`）显示在标题后。关闭 `explorer.decorations.badges` 后，标题后显示日历日期。侧栏可见时于本地午夜重绘树。悬停可查看完整标题、日期、时间和路径。
 
-普通仓库和文件夹图标使用主题色 `textLink.foreground`，来源未确认和隐藏的项目使用 `descriptionForeground`。当前项目显示 ✅，置顶项目和对话显示 ⭐。一个项目有多个状态时，按隐藏、置顶、当前、来源未确认的顺序选择图标，项目描述仍显示当前与来源状态。两个 Emoji 图标随扩展分发并附带许可。[Fluent Emoji](https://github.com/microsoft/fluentui-emoji/tree/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc)
+普通仓库和文件夹图标使用主题色 `textLink.foreground`，来源未确认和隐藏的项目使用 `descriptionForeground`。当前项目显示 ➡️，置顶项目和对话显示 ⭐。一个项目有多个状态时，按隐藏、置顶、当前、来源未确认的顺序选择图标，项目描述仍显示当前与来源状态。两个 Emoji 图标随扩展分发并附带许可。[Fluent Emoji](https://github.com/microsoft/fluentui-emoji/tree/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc)
+
+活动栏与扩展详情图标在 Codex 图形旁放置列表符号。Codex 图形取自官方 VS Code 扩展随附的 `blossom-white.svg`，属于 OpenAI。
 
 常规和置顶对话使用相同的图标槽，标题起点一致。VS Code 在右侧以逗号合并项目数量和相对时间，数量在前，超过 99 显示 `99`。关闭徽标后，实际数量显示在项目名称后。同名项目优先用最短可区分的上级路径作说明。悬停项目可查看实际数量、完整路径以及最新会话时间。
 

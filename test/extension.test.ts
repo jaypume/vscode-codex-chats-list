@@ -253,7 +253,7 @@ test('each range, grouping, title search and folder filter uses the same indexed
   expect(fixture.api.snapshot()).toMatchObject({ scope: 'current', grouping: 'repository', indexed: true });
   expect(ids()).toEqual(['thread-folder', 'thread-fork', 'thread-upstream']);
   expect(fixture.tree.getTreeItem(fixture.tree.getChildren()[0]!).iconPath).toMatchObject({
-    path: '/extension/media/current-check.png',
+    path: '/extension/media/current-arrow.png',
   });
   await fixture.pick('all');
   expect(ids()).toContain('thread-local');
