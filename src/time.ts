@@ -1,32 +1,22 @@
-import type { Localize } from './i18n';
+const DAY_MS = 86_400_000;
+const DAYS_PER_WEEK = 7;
+const MAX_BADGE_WEEKS = 4;
 
-/** Format conversation recency against one clock value, using calendar dates across DST changes. */
-export function createTimeFormatter(locale: string, t: Localize) {
-  const shortDate = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' });
-  const fullDate = new Intl.DateTimeFormat(locale, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-  return (seconds: number, clock = Date.now()) => {
-    if (!Number.isFinite(seconds) || seconds <= 0) return t('unknownTime');
-    const date = new Date(seconds * 1000);
-    if (!Number.isFinite(date.getTime())) return t('unknownTime');
-    const minutes = Math.max(0, Math.floor((clock - seconds * 1000) / 60000));
-    if (minutes < 1) return t('now');
-    if (minutes < 60) return t('minutesAgo', { count: minutes });
-    const now = new Date(clock);
-    const dayNumber = (value: Date) =>
-      Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) / 86400000;
-    const days = dayNumber(now) - dayNumber(date);
-    if (days === 0) return t('hoursAgo', { count: Math.floor(minutes / 60) });
-    if (days === 1) return t('yesterday');
-    if (days < 7 && days > 1) return t('daysAgo', { count: days });
-    if (locale === 'en')
-      return (date.getFullYear() === now.getFullYear() ? shortDate : fullDate).format(date);
-    const monthDay = `${date.getMonth() + 1}/${date.getDate()}`;
-    return date.getFullYear() === now.getFullYear()
-      ? monthDay
-      : `${String(date.getFullYear()).slice(-2)}/${monthDay}`;
-  };
+export function formatConversationDate(
+  date: Date,
+  now = new Date(),
+): { text: string; badge?: string } | undefined {
+  if (!Number.isFinite(date.getTime())) return undefined;
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  const short = `${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const absolute = `${year}-${short}`;
+  if (year !== now.getFullYear()) return { text: absolute };
+  // Compare calendar days across daylight-saving changes.
+  const today = Date.UTC(year, now.getMonth(), now.getDate());
+  const days = (today - Date.UTC(year, month, day)) / DAY_MS;
+  const weeks = Math.floor(days / DAYS_PER_WEEK);
+  if (days < 0 || weeks > MAX_BADGE_WEEKS) return { text: absolute };
+  return { text: short, badge: days <= DAYS_PER_WEEK ? `${days}d` : `${weeks}w` };
 }

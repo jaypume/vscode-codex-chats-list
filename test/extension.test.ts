@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   updateScope: vi.fn<(key: string, value: unknown) => Promise<void>>(),
   cliPath: undefined as string | undefined,
   legacyCliPath: '/fixture/codex',
+  countBadges: true,
 }));
 vi.mock('../src/client', () => ({ CodexClient: class {
   constructor(...args: unknown[]) { mocks.construct(...args); }
@@ -46,7 +47,8 @@ vi.mock('vscode', () => ({
   workspace: {
     workspaceFolders: [{ uri: { scheme: 'file', fsPath: '/fixture' } }],
     getConfiguration: (section: string) => ({
-      get: () => section === 'codexProjectChats' ? mocks.legacyCliPath : false,
+      get: () => section === 'codexProjectChats' ? mocks.legacyCliPath
+        : section === 'explorer.decorations' ? mocks.countBadges : false,
       inspect: () => ({ globalValue: mocks.cliPath, defaultValue: '' }),
     }),
     onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
@@ -54,6 +56,7 @@ vi.mock('vscode', () => ({
   },
   window: {
     createTreeView: mocks.createTree,
+    registerFileDecorationProvider: () => ({ dispose() {} }),
     createInputBox: mocks.createInputBox,
     showQuickPick: mocks.promptScope,
     showOpenDialog: mocks.chooseFolder,
@@ -71,6 +74,10 @@ vi.mock('vscode', () => ({
   },
   TreeItem: class {
     constructor(readonly label: string, readonly collapsibleState = 0) {}
+  },
+  Uri: { from: (value: unknown) => value },
+  FileDecoration: class {
+    constructor(readonly badge: string, readonly tooltip: string) {}
   },
   TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
   ThemeIcon: class {
@@ -191,6 +198,7 @@ beforeEach(() => {
   mocks.registerCommand.mockReturnValue({ dispose() {} });
   mocks.updateScope.mockReset().mockResolvedValue(undefined);
   mocks.cliPath = undefined;
+  mocks.countBadges = true;
   mocks.legacyCliPath = '/fixture/codex';
 });
 afterEach(() => {
@@ -366,7 +374,7 @@ test('hidden items can be filtered and restored without changing their pins or o
   await fixture.ready();
   const root = () => fixture.tree.getChildren()[0]!;
   const children = () => fixture.tree.getChildren(root());
-  const label = (node: TreeNode) => fixture.tree.getTreeItem(node).label;
+  const label = (node: TreeNode) => node.kind === 'chat' ? node.chat.title : fixture.tree.getTreeItem(node).label;
   const first = children()[0]!;
   await fixture.run('pin', first);
   await fixture.run('hide', first);
@@ -408,7 +416,7 @@ test('deleting an individual conversation requires modal confirmation and change
   mocks.showWarning.mockImplementationOnce(async (_message, _options, _cancel, confirm) => confirm);
   await fixture.run('delete', thread);
   expect(mocks.deleteThread).toHaveBeenCalledExactlyOnceWith('thread-remove');
-  expect(children().map(node => fixture.tree.getTreeItem(node).label)).toEqual(['thread-keep']);
+  expect(children()).toMatchObject([{ chat: { title: 'thread-keep' } }]);
 });
 
 test('repository deletion covers hidden and filtered conversations and leaves failed and unrelated rows', async () => {
@@ -436,7 +444,7 @@ test('repository deletion covers hidden and filtered conversations and leaves fa
   await fixture.run('clearSearch');
   expect(fixture.api.snapshot().count).toBe(2);
   const remaining = fixture.tree.getChildren().flatMap(node => fixture.tree.getChildren(node));
-  expect(remaining.map(node => fixture.tree.getTreeItem(node).label)).toEqual(['other', 'Unrelated']);
+  expect(remaining).toMatchObject([{ chat: { title: 'other' } }, { chat: { title: 'Unrelated' } }]);
 });
 
 test('All lists every cached repository and chat, sorts groups, and pins without requerying Codex', async () => {
@@ -444,7 +452,7 @@ test('All lists every cached repository and chat, sorts groups, and pins without
     ({ id, title: id, cwd: '/repos/' + repo, repository: 'github.com/example/' + repo, recencyAt });
   mocks.list.mockResolvedValueOnce({
     chats: [
-      ...Array.from({ length: 60 }, (_, i) => chat('noise-' + i, 'noise', 1000 - i)),
+      ...Array.from({ length: 105 }, (_, i) => chat('noise-' + i, 'noise', 1000 - i)),
       ...Array.from({ length: 55 }, (_, i) => chat('zebra-' + i, 'zebra-' + i, 900 - i)),
       chat('old-session', 'alpha', 1),
       chat('recent-session', 'alpha', 2),
@@ -456,23 +464,41 @@ test('All lists every cached repository and chat, sorts groups, and pins without
   await fixture.ready();
   await fixture.pick('all');
   const roots = () => fixture.tree.getChildren();
-  const title = (node: TreeNode) => fixture.tree.getTreeItem(node).label;
+  const title = (node: TreeNode) => node.kind === 'chat' ? node.chat.title : fixture.tree.getTreeItem(node).label;
   expect(roots()).toHaveLength(58);
   expect(roots().every(node => node.kind === 'project')).toBe(true);
-  expect(fixture.view.badge?.value).toBe(118);
+  expect(fixture.view.badge?.value).toBe(163);
   const noise = roots()[0]!;
   expect(title(noise)).toBe('noise');
-  expect(fixture.tree.getChildren(noise)).toHaveLength(60);
+  expect(fixture.tree.getChildren(noise)).toHaveLength(105);
+  const largeProject = fixture.tree.getTreeItem(noise);
+  expect(largeProject.description).toBe('');
+  expect(largeProject.tooltip).toContain('105 chats');
+  expect(largeProject.accessibilityInformation?.label).toContain('105 chats');
+  expect(fixture.tree.provideFileDecoration(largeProject.resourceUri!)).toMatchObject({
+    badge: '99',
+    tooltip: '105 chats',
+  });
   expect(title(roots().at(-1)!)).toBe('alpha');
   await fixture.search('noise');
   expect(roots()).toHaveLength(1);
   expect(fixture.tree.getTreeItem(roots()[0]!)).toMatchObject({ collapsibleState: 1 });
-  expect(fixture.tree.getChildren(roots()[0]!)).toHaveLength(60);
+  expect(fixture.tree.getChildren(roots()[0]!)).toHaveLength(105);
   await fixture.run('clearSearch');
   mocks.promptScope.mockResolvedValueOnce({ value: 'name' });
   await fixture.run('sortProjects');
   const [alpha, beta] = roots();
   expect(roots().slice(0, 3).map(title)).toEqual(['alpha', 'beta', 'noise']);
+  const item = fixture.tree.getTreeItem(alpha!);
+  expect(fixture.tree.provideFileDecoration(item.resourceUri!)).toMatchObject({ badge: '2', tooltip: '2 chats' });
+  expect(item.accessibilityInformation?.label).toContain('2 chats');
+  mocks.countBadges = false;
+  fixture.tree.updateBadgeSetting();
+  expect(fixture.tree.getTreeItem(noise).description).toBe('105 chats');
+  expect(fixture.tree.getTreeItem(alpha!).description).toBe('2 chats');
+  expect(fixture.tree.getTreeItem(alpha!).resourceUri).toBeUndefined();
+  mocks.countBadges = true;
+  fixture.tree.updateBadgeSetting();
   expect(mocks.updateScope).toHaveBeenLastCalledWith('historyView', expect.objectContaining({ order: 'name' }));
   await fixture.run('pin', beta);
   expect(roots().slice(0, 3).map(title)).toEqual(['beta', 'alpha', 'noise']);
@@ -582,14 +608,50 @@ test('validates the selected ID before navigating and removes a confirmed archiv
   expect(mocks.openConversation).toHaveBeenCalledTimes(1);
 });
 
-test('refreshes time labels on the minute only while the tree is visible', async () => {
+test('date badges keep titles searchable and refresh once at local midnight', async () => {
+  vi.setSystemTime(new Date(2026, 10, 23, 23, 58));
+  const preview = page('thread-default');
+  preview.chats[0]!.recencyAt = new Date(2026, 10, 22, 12).getTime() / 1000;
+  preview.chats.push(
+    { id: 'thread-in-year', cwd: '/fixture', title: 'Earlier', recencyAt: new Date(2026, 10, 12).getTime() / 1000 },
+    { id: 'thread-in-october', cwd: '/fixture', title: 'October', recencyAt: new Date(2026, 9, 19).getTime() / 1000 },
+    { id: 'thread-lastyear', cwd: '/fixture', title: 'Last year', recencyAt: new Date(2025, 9, 27).getTime() / 1000 },
+    { id: 'thread-undated', cwd: '/fixture', title: 'Undated', recencyAt: 0 },
+  );
+  mocks.list.mockResolvedValue(preview);
   const fixture = await setup();
   await fixture.ready();
+  const [dated, older, october, lastYear, undated] = fixture.tree.getChildren(fixture.tree.getChildren()[0]);
+  const item = fixture.tree.getTreeItem(dated!);
+  expect(item).toMatchObject({
+    label: 'thread-default',
+    iconPath: { id: 'blank' },
+  });
+  expect(item.description).toBeUndefined();
+  expect(item.tooltip).toContain('2026');
+  expect(item.tooltip).toContain('12:00');
+  expect(fixture.tree.provideFileDecoration(item.resourceUri!)?.badge).toBe('1d');
+  const olderUri = fixture.tree.getTreeItem(older!).resourceUri!;
+  expect(fixture.tree.provideFileDecoration(olderUri)?.badge).toBe('1w');
+  expect(fixture.tree.getTreeItem(october!).description).toBe('2026-10-19');
+  expect(fixture.tree.getTreeItem(october!).resourceUri).toBeUndefined();
+  const lastYearItem = fixture.tree.getTreeItem(lastYear!);
+  expect(lastYearItem.description).toBe('2025-10-27');
+  expect(lastYearItem.resourceUri).toBeUndefined();
+  const undatedItem = fixture.tree.getTreeItem(undated!);
+  expect(undatedItem.label).toBe('Undated');
+  expect(undatedItem.description).toBeUndefined();
+  await fixture.search('1d');
+  expect(fixture.tree.getChildren()).toEqual([]);
+  await fixture.run('clearSearch');
   const checks = fixture.rendered.mock.calls.length;
   await vi.advanceTimersByTimeAsync(60_000);
-  expect(fixture.rendered).toHaveBeenCalledTimes(checks + 1);
-  fixture.setVisible(false);
-  const hidden = fixture.rendered.mock.calls.length;
+  expect(fixture.rendered).toHaveBeenCalledTimes(checks);
   await vi.advanceTimersByTimeAsync(60_000);
-  expect(fixture.rendered).toHaveBeenCalledTimes(hidden);
+  expect(fixture.rendered).toHaveBeenCalledTimes(checks + 1);
+  expect(fixture.tree.provideFileDecoration(fixture.tree.getTreeItem(dated!).resourceUri!)?.badge).toBe('2d');
+  mocks.countBadges = false;
+  fixture.tree.updateBadgeSetting();
+  expect(fixture.tree.getTreeItem(dated!).description).toBe('11-22');
+  expect(fixture.tree.getTreeItem(dated!).resourceUri).toBeUndefined();
 });

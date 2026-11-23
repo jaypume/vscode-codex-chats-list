@@ -1,33 +1,23 @@
 import { expect, test } from 'vitest';
 
-import { createLocalizer } from '../src/i18n';
-import { createTimeFormatter } from '../src/time';
+import { formatConversationDate } from '../src/time';
 
-const en = createTimeFormatter('en', createLocalizer('en'));
-const zh = createTimeFormatter('zh-CN', createLocalizer('zh-CN'));
-
-test('relative time handles minute boundaries, absent dates, and future clock skew', () => {
-  const now = new Date(2026, 9, 27, 12).getTime();
-  expect(en(now / 1000 - 59, now)).toBe('Just now');
-  expect(en(now / 1000 - 60, now)).toBe('1m ago');
-  expect(zh(now / 1000 - 3600, now)).toBe('1小时前');
-  expect(en(now / 1000 + 300, now)).toBe('Just now');
-  for (const value of [0, -1, NaN, Infinity, 1e20]) expect(en(value, now)).toBe('Unknown');
+test('date badges switch from days to weeks to full dates using the local calendar', () => {
+  const now = new Date(2026, 10, 8, 0);
+  const relativeDays = [
+    [0, '0d'], [7, '7d'], [8, '1w'], [13, '1w'], [14, '2w'], [20, '2w'],
+    [21, '3w'], [27, '3w'], [28, '4w'], [34, '4w'],
+  ] as const;
+  for (const [daysAgo, badge] of relativeDays) {
+    expect(formatConversationDate(new Date(2026, 10, 8 - daysAgo, 23, 59), now)?.badge).toBe(badge);
+  }
+  expect(formatConversationDate(new Date(2026, 10, 7, 23, 59), now)).toEqual({ text: '11-07', badge: '1d' });
+  expect(formatConversationDate(new Date(2026, 9, 4, 23, 59), now)).toEqual({ text: '2026-10-04' });
+  expect(formatConversationDate(new Date(2026, 10, 9), now)).toEqual({ text: '2026-11-09' });
+  expect(formatConversationDate(new Date(2025, 11, 31, 23, 59), new Date(2026, 0, 1))).toEqual({ text: '2025-12-31' });
 });
 
-test('calendar-day labels change across midnight even before 24 hours have elapsed', () => {
-  const now = new Date(2026, 9, 27, 0, 30).getTime();
-  const yesterday = new Date(2026, 9, 26, 22).getTime() / 1000;
-  expect(en(yesterday, now)).toBe('Yesterday');
-  expect(zh(yesterday, now)).toBe('昨天');
-  expect(en(new Date(2026, 9, 25, 12).getTime() / 1000, now)).toBe('2d ago');
-});
-
-test('older dates retain the year only across calendar years', () => {
-  const now = new Date(2026, 9, 27, 12).getTime();
-  const sameYear = new Date(2026, 9, 17, 12).getTime() / 1000;
-  const lastYear = new Date(2025, 9, 17, 12).getTime() / 1000;
-  expect(en(sameYear, now)).toBe('Oct 17');
-  expect(en(lastYear, now)).toBe('Oct 17, 2025');
-  expect(zh(lastYear, now)).toBe('25/10/17');
+test('invalid timestamps have no calendar date', () => {
+  expect(formatConversationDate(new Date(NaN))).toBeUndefined();
+  expect(formatConversationDate(new Date(1e20))).toBeUndefined();
 });

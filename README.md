@@ -18,7 +18,7 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 | Choose the scope | Use **Change Conversation Scope** in the view toolbar to select **Current project** or **All projects**. |
 | Group and filter | Use **Group Conversations** to select **By Repository** or **By Folder**. The view menu has **Toggle Non-Git Folders**. |
 | Search titles | Select the magnifier and type a title keyword. The tree updates within the selected scope, **Current project** or **All projects**. Enter keeps the filter and Escape restores the previous results. Use **Clear Conversation Search** to reset it. |
-| See details | Each row shows the latest conversation time. Hover over a conversation for its full title, time, and project path. |
+| See details | Conversation date badges show days such as `2d` or weeks such as `4w`. Dates at least five weeks old or from other years appear after the title as `YYYY-MM-DD`. Project count badges display at most `99`. Hover for the full title, timestamp, path, or exact count. |
 | Sort all projects | In **All projects**, open the view's **…** menu and choose **Sort Projects**. Sort by name or by the most recent conversation. |
 | Pin a project or conversation | Right-click a project group or conversation and choose **Pin** or **Unpin**. Pinned groups come first. Pinned conversations come first within their group. |
 | Hide or restore items | Right-click a project group or conversation and choose **Hide**. Use **… → Toggle Hidden Items View** to find hidden items and right-click **Unhide** to restore them. |

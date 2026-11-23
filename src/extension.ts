@@ -18,7 +18,6 @@ const t = createLocalizer(vscode.env.language);
 const OFFICIAL_ID = 'openai.chatgpt';
 const INDEX_STEP_MS = 150;
 const PAGE_SIZE = 50;
-const MINUTE_MS = 60_000;
 const SEARCH_LIMIT = 200;
 const SEARCH_DELAY_MS = 120;
 const LEGACY_CONFIG_SECTION = 'codexProjectChats';
@@ -102,7 +101,7 @@ class CodexChatsListView implements vscode.Disposable {
   private ready = false;
   private disposed = false;
   private autoRefreshTimer?: ReturnType<typeof setTimeout>;
-  private clockTimer?: ReturnType<typeof setTimeout>;
+  private dateRefreshTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     const saved = context.workspaceState.get<Scope | 'repository'>('scope');
@@ -138,20 +137,18 @@ class CodexChatsListView implements vscode.Disposable {
 
   private visibilityChanged(): void {
     clearTimeout(this.autoRefreshTimer);
-    clearTimeout(this.clockTimer);
+    clearTimeout(this.dateRefreshTimer);
     if (!this.view?.visible || this.disposed) return;
-    this.tree.refreshTimes();
-    this.scheduleClock();
+    this.refreshDates();
     if (!this.ready) void this.updateWorkspace();
     void this.sync();
   }
 
-  private scheduleClock(): void {
-    this.clockTimer = setTimeout(() => {
-      if (!this.view?.visible || this.disposed) return;
-      this.tree.refreshTimes();
-      this.scheduleClock();
-    }, MINUTE_MS - Date.now() % MINUTE_MS);
+  private refreshDates(): void {
+    this.tree.refresh();
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    this.dateRefreshTimer = setTimeout(() => this.refreshDates(), tomorrow.getTime() - now.getTime());
   }
 
   async updateWorkspace(forcePaths = false): Promise<void> {
@@ -695,7 +692,7 @@ class CodexChatsListView implements vscode.Disposable {
     if (this.disposed) return;
     this.disposed = true;
     clearTimeout(this.autoRefreshTimer);
-    clearTimeout(this.clockTimer);
+    clearTimeout(this.dateRefreshTimer);
     clearTimeout(this.repositoryRenderTimer);
     this.searchInput?.hide();
     this.connecting?.dispose();
@@ -709,6 +706,7 @@ export function activate(context: vscode.ExtensionContext) {
   const view = vscode.window.createTreeView(VIEW_ID, { treeDataProvider: provider.tree, showCollapseAll: true });
   context.subscriptions.push(provider,
     view,
+    vscode.window.registerFileDecorationProvider(provider.tree),
     vscode.commands.registerCommand('codexChatsList.open', () => vscode.commands.executeCommand(`${VIEW_ID}.focus`)),
     vscode.commands.registerCommand('codexChatsList.refresh', () => provider.refresh()),
     vscode.commands.registerCommand('codexChatsList.selectScope', () => provider.pickScope()),
@@ -730,6 +728,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(OPEN_CONVERSATION, (id: string) => provider.open(id)),
     vscode.workspace.onDidChangeWorkspaceFolders(() => { void provider.updateWorkspace(); }),
     vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('explorer.decorations.badges')) provider.tree.updateBadgeSetting();
       if (event.affectsConfiguration('codexChatsList.cliPath')
         || (event.affectsConfiguration(`${LEGACY_CONFIG_SECTION}.cliPath`) && ownCliPath() === undefined)) {
         void provider.resetSource();

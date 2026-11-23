@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.11.1
+
+### Changed
+
+- Use day and week badges for recent conversations and show full dates for conversations at least five weeks old or from another year.
+
+## 1.11.0
+
+### Changed
+
+- Show conversation dates in the right-hand badge area, using relative days for the past week and month and day for earlier conversations this year.
+- Include the year in the row text for conversations from other years.
+
+## 1.10.2
+
+### Changed
+
+- Follow conversation titles with a short activity date and show the full timestamp on hover.
+
+## 1.10.1
+
+### Fixed
+
+- Keep counts above 99 in the right-hand project badge by displaying `99`, with the exact count on hover.
+
+## 1.10.0
+
+### Changed
+
+- Show conversation dates before titles in `YYYY-MM-DD` format and use native badges for project counts.
+- Keep same-name projects distinguishable with shorter path qualifiers and retain full details on hover.
+
 ## 1.9.0
 
 ### Added
