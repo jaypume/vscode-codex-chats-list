@@ -1,4 +1,5 @@
 import { test, expect } from 'vitest';
+import { repositoryKey } from '../src/git';
 import { parsePage, groupChats, pathKey, uniquePaths, type Chat } from '../src/model';
 
 test('protocol parser rejects a broken page and skips malformed thread records', () => {
@@ -61,4 +62,28 @@ test('protocol parsing preserves the full title for hover details', () => {
   const title = 'x'.repeat(220) + ' END';
   const page = parsePage({ data: [{ id: 'thread-0001', cwd: '/fixture', name: title }] });
   expect(page.chats[0]?.title).toBe(title);
+});
+
+test('Git repository keys normalize common transports and remove URL credentials', () => {
+  for (const remote of [
+    'git@github.com:Team/App.git',
+    'https://user:token@github.com/team/app.git/?query=secret',
+    'ssh://git@GitHub.COM:22/team/app',
+  ]) expect(repositoryKey(remote)).toBe('github.com/team/app');
+  expect(repositoryKey('ssh://git@source.example:2222/team/App.git')).toBe('source.example:2222/team/App');
+  expect(repositoryKey('https://source.example/team/app')).not.toBe(repositoryKey('https://source.example/team/App'));
+  expect(repositoryKey('file:///tmp/app.git')).toBeUndefined();
+  expect(repositoryKey('C:\\Repos\\App')).toBeUndefined();
+  expect(repositoryKey('../app')).toBeUndefined();
+});
+
+test('protocol keeps only the normalized remote key and keeps older rows readable', () => {
+  const { chats } = parsePage({ data: [
+    { id: 'thread-remote', cwd: '/old', gitInfo: { originUrl: 'https://user:token@github.com/team/app.git' } },
+    { id: 'thread-legacy', cwd: '/old', gitInfo: null },
+  ] });
+  expect(chats[0]?.repository).toBe('github.com/team/app');
+  expect(JSON.stringify(chats)).not.toContain('token');
+  expect(chats[1]?.repository).toBeUndefined();
+  expect(groupChats(chats, [])[0]?.chats).toHaveLength(2);
 });

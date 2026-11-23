@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+
+- Group current or all conversations by Git repository or folder. Local Git repositories work without a remote.
+- Toggle folders that are confirmed to be outside Git repositories.
+- Share a persistent conversation index across windows and load historical pages once.
+
+## 1.3.0
+
+### Added
+
+- Browse conversations by the workspace Git repository. Match saved remotes against `origin` or `upstream` to find conversations after moving a checkout.
+
 ## 1.2.1
 
 ### Fixed

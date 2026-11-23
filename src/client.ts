@@ -1,7 +1,9 @@
 import { createLocalizer, type Localize } from './i18n';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import { createInterface } from 'node:readline';
-import { isRecord, parsePage, type ChatPage } from './model';
+import { isRecord, parsePage, type Chat, type ChatPage } from './model';
 
 interface Pending {
   resolve: (result: unknown) => void;
@@ -9,12 +11,18 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
 }
 
-/** A local stdio client, restricted by this extension to initialize and thread/list. */
+const listOptions = {
+  archived: false, limit: 50, sortKey: 'recency_at', sortDirection: 'desc',
+  sourceKinds: ['vscode', 'cli', 'appServer'], useStateDbOnly: true, modelProviders: [],
+};
+
+/** A local stdio client for reading conversation metadata. */
 export class CodexClient {
   private process?: ChildProcessWithoutNullStreams;
   private nextId = 0;
   private pending = new Map<number, Pending>();
   private starting?: Promise<void>;
+  private codexHome?: string;
   private readonly t: Localize;
   constructor(private readonly binary: string, private readonly version: string, language = 'en') { this.t = createLocalizer(language); }
 
@@ -37,7 +45,10 @@ export class CodexClient {
           this.pending.delete(message.id);
           clearTimeout(pending.timer);
           if (isRecord(message.error)) {
-            pending.reject(new Error(typeof message.error.message === 'string' ? message.error.message : this.t('errorRequestFailed')));
+            pending.reject(Object.assign(
+              new Error(typeof message.error.message === 'string' ? message.error.message : this.t('errorRequestFailed')),
+              { code: message.error.code },
+            ));
           } else pending.resolve(message.result);
         } catch { /* Ignore non-JSON diagnostics; the request timeout remains authoritative. */ }
       });
@@ -49,10 +60,19 @@ export class CodexClient {
           this.fail(new Error(this.t('errorExited')));
         }
       });
-      await this.request('initialize', { clientInfo: { name: 'codex_chats_list', title: 'Codex Chats List', version: this.version } });
+      const initialized = await this.request('initialize', {
+        clientInfo: { name: 'codex_chats_list', title: 'Codex Chats List', version: this.version },
+      });
+      this.codexHome = isRecord(initialized) && typeof initialized.codexHome === 'string' && path.isAbsolute(initialized.codexHome)
+        ? initialized.codexHome : undefined;
       child.stdin.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n');
     })();
     try { await this.starting; } catch (error) { this.dispose(); throw error; }
+  }
+
+  async historySource(): Promise<string> {
+    await this.start();
+    return this.codexHome ?? JSON.stringify([this.binary, process.env.CODEX_HOME || path.join(homedir(), '.codex')]);
   }
 
   private request(method: string, params: Record<string, unknown>): Promise<unknown> {
@@ -76,10 +96,7 @@ export class CodexClient {
   /** Server-side filters apply before pagination; never scan a truncated global list for a project. */
   async list(roots: string[] | undefined, search: string, cursor: string | null): Promise<ChatPage> {
     await this.start();
-    const params: Record<string, unknown> = {
-      archived: false, limit: 50, sortKey: 'recency_at', sortDirection: 'desc',
-      sourceKinds: ['vscode', 'cli', 'appServer'], useStateDbOnly: true,
-    };
+    const params: Record<string, unknown> = { ...listOptions };
     if (roots !== undefined) {
       if (!roots.length) return { chats: [], nextCursor: null };
       params.cwd = roots;
@@ -87,6 +104,30 @@ export class CodexClient {
     if (search.trim()) params.searchTerm = search.trim();
     if (cursor) params.cursor = cursor;
     return parsePage(await this.request('thread/list', params), this.t);
+  }
+
+  async checkThread(id: string): Promise<Chat | undefined> {
+    await this.start();
+    const params = { ...listOptions, limit: 1, includedThreadIds: [id] };
+    const active = parsePage(await this.request('thread/list', params), this.t).chats;
+    const exact = active.find(chat => chat.id === id);
+    if (exact) return exact;
+    if (!active.length) {
+      const archived = parsePage(await this.request('thread/list', { ...params, archived: true }), this.t).chats;
+      if (archived.some(chat => chat.id === id)) return undefined;
+    }
+    // Some older servers ignore includedThreadIds. Read by ID before discarding the entry.
+    try {
+      const reply = await this.request('thread/read', { threadId: id, includeTurns: false });
+      const chat = parsePage({ data: [isRecord(reply) ? reply.thread : undefined] }, this.t).chats[0];
+      if (chat?.id === id) return chat;
+      throw new Error(this.t('errorInvalidResponse'));
+    } catch (error) {
+      const code = (error as { code?: unknown } | null)?.code;
+      if ((code === -32600 || code === -32602) && error instanceof Error
+        && /no rollout path|thread (?:was )?not found/i.test(error.message)) return undefined;
+      throw error;
+    }
   }
 
   private fail(error: Error): void {

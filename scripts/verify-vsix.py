@@ -20,6 +20,7 @@ with ZipFile(archive) as package:
     for name in ("extension/readme.md", "extension/changelog.md", "extension/LICENSE.txt",
                  "extension/README.zh-CN.md", "extension/SUPPORT.md", "extension/media/icon.png",
                  "extension/dist/extension/extension.js", "extension/dist/extension/tree.js",
+                 "extension/dist/extension/history.js", "extension/dist/extension/history-store.js",
                  "extension/package.nls.json", "extension/package.nls.zh.json", "extension/package.nls.zh-cn.json"):
         assert name in names, f"Missing public asset: {name}"
     allowed = ("extension/dist/extension/", "extension/media/")

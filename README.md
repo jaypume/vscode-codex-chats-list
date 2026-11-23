@@ -15,16 +15,19 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 
 | Action | How it works |
 | --- | --- |
-| Choose the scope | Use **Change Conversation Scope** in the view toolbar to switch between **Current project** and **All projects**. |
+| Choose the scope | Use **Change Conversation Scope** in the view toolbar to select **Current project** or **All projects**. |
+| Group and filter | Use **Group Conversations** to select **By Repository** or **By Folder**. The view menu has **Toggle Non-Git Folders**. |
 | Filter by title | Use **Search Conversation Titles**, enter a keyword, and press Enter. Results stay grouped in the tree. Use **Clear Conversation Search** or submit an empty search to reset the filter. |
 | See details | Each row shows the latest conversation time. Hover over a conversation for its full title, time, and project path. |
-| Load and refresh | Select **Load more conversations** at the end of the tree. Use **Refresh Conversations** to reload the first page. |
+| Load and refresh | Select **Load more conversations** to show another indexed page. Use **Refresh Conversations** to check recent activity and return to the first page. |
 
-The current scope matches exact working directories, including resolved workspace symlinks. Subdirectories and Git worktrees appear as separate groups. Select **All projects** to see them, or to browse when no folder is open. Projects with the same name display their paths.
+With **By Repository**, the current scope matches either the workspace repository’s `origin` or `upstream`. A matching remote also finds conversations from moved checkouts. In **All projects**, different saved remotes have their own groups. Local repositories with no remote group under their Git root.
 
-Codex filters by title and directory before pagination. Each page contains up to 50 conversations. Counts describe loaded results. Recently active conversations appear first within each project. The tree shows non-archived, interactive local conversations.
+Ordinary folders use their directory names and remain distinct by path. If the folder is missing and Codex saved no Git identity, the group shows **Source unknown**. The folder filter hides only confirmed non-Git folders. **By Folder** keeps separate working-directory groups and matches exact workspace paths for **Current project**.
 
-The visible tree refreshes five seconds after each completed query. It keeps loaded pages on screen during background refreshes and pauses polling while hidden. The scope and project expansion are saved per workspace. Matching groups open during a title search, and clearing it restores the regular tree's expansion.
+The first scan indexes history in the background. Results appear as pages become available. The local index is shared by windows with the same VS Code profile, extension host, and Codex source. Switching the scope or grouping, searching titles, and loading more read from the index. Background updates check recent activity only while the view is visible.
+
+The index stores listing metadata, including sanitized repository keys. Selecting a cached conversation checks its metadata with Codex before opening. Renames or archives outside the recently checked activity may appear stale until that conversation is selected. Hosts without Node SQLite use an in-memory index.
 
 ## Preview
 
@@ -42,12 +45,12 @@ The manifest requires VS Code 1.100 or newer. The extension follows the VS Code 
 
 | Situation | Guidance |
 | --- | --- |
-| Empty current-project tree | The saved working directory must match a workspace root. Select **All projects** for sessions started in a subdirectory or worktree. |
+| Empty current-project tree | Try **By Repository** for conversations from another checkout or worktree. **All projects** shows other indexed directories too. |
 | Codex binary unavailable | Enable the official extension or set `codexChatsList.cliPath` to an absolute executable path on the current host. |
 | Opening a conversation fails | Open the official Codex sidebar and retry. Include both extension versions when reporting the issue, since the navigation URI comes from the official extension. |
 | WSL, SSH, or a container | Install both extensions in the remote workspace. History stays on each host. For Windows with Codex running in WSL, open the project in a WSL window. |
 
-The extension reads conversation IDs, titles, working directories, and recent conversation times from the local bundled `codex app-server`. It uses `thread/list` with `useStateDbOnly`. When a title is missing, the server's first-message preview can supply the label. The official executable manages its internal state and logs. Navigation uses the official extension's existing `/local/<id>` URI handler.
+The extension reads conversation IDs, titles, working directories, recent conversation times, and available Git remote metadata from the local bundled `codex app-server`. It uses `thread/list` with `useStateDbOnly`. When a title is missing, the server's first-message preview can supply the label. The official executable manages its internal state and logs. Navigation uses the official extension's existing `/local/<id>` URI handler.
 
 Codex Chats List 1.2.1 can run alongside Codex Project Chats. When `codexChatsList.cliPath` is unset, the fork reads the previous `codexProjectChats.cliPath` value. Set the new key to an empty string to use the official extension's bundled executable. If you assigned a shortcut to the fork's open or refresh command, update it to `codexChatsList.open` or `codexChatsList.refresh`. You can move the new activity bar entry to your preferred position.
 

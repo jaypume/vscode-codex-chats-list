@@ -1,17 +1,21 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type * as vscode from 'vscode';
-import type { ChatPage, Scope } from '../src/model';
+import type { Directory, WorkspaceRepository } from '../src/git';
+import type { Chat, ChatPage, Grouping, Scope } from '../src/model';
 import type { ChatTree, TreeNode } from '../src/tree';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn<(roots: string[] | undefined, search: string, cursor: string | null) => Promise<ChatPage>>(),
+  inspectDirectory: vi.fn<(cwd: string) => Promise<Directory>>(),
+  checkThread: vi.fn<(id: string) => Promise<Chat | undefined>>(),
+  findRepositories: vi.fn<(roots: string[]) => Promise<Map<string, WorkspaceRepository>>>(),
   dispose: vi.fn(),
   construct: vi.fn(),
   createTree: vi.fn<(id: string, options: vscode.TreeViewOptions<TreeNode>) => vscode.TreeView<TreeNode>>(),
   registerCommand: vi.fn<(id: string, handler: (...args: unknown[]) => unknown) => vscode.Disposable>(),
   executeCommand: vi.fn(),
   openConversation: vi.fn(),
-  promptScope: vi.fn<(items: { value: Scope }[]) => Promise<{ value: Scope } | undefined>>(),
+  promptScope: vi.fn<(items: { value: Scope | Grouping }[]) => Promise<{ value: Scope | Grouping } | undefined>>(),
   promptSearch: vi.fn<(options: vscode.InputBoxOptions) => Promise<string | undefined>>(),
   realpath: vi.fn<(path: string) => Promise<string>>(),
   updateScope: vi.fn<(key: string, value: unknown) => Promise<void>>(),
@@ -21,9 +25,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../src/client', () => ({ CodexClient: class {
   constructor(...args: unknown[]) { mocks.construct(...args); }
   list = mocks.list;
+  async historySource() { return '/fixture/codex-home'; }
+  checkThread = mocks.checkThread;
   dispose = mocks.dispose;
 } }));
 vi.mock('../src/routing', () => ({ openInCodex: mocks.openConversation }));
+vi.mock('../src/git', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/git')>(),
+  findRepositories: mocks.findRepositories,
+  inspectDirectory: mocks.inspectDirectory,
+}));
 vi.mock('node:fs/promises', () => ({ access: async () => {}, realpath: mocks.realpath }));
 vi.mock('vscode', () => ({
   env: { language: 'en' },
@@ -41,6 +52,7 @@ vi.mock('vscode', () => ({
     createTreeView: mocks.createTree,
     showInputBox: mocks.promptSearch,
     showQuickPick: mocks.promptScope,
+    showInformationMessage: vi.fn(),
     withProgress: (_options: unknown, task: () => Promise<void>) => task(),
   },
   commands: { registerCommand: mocks.registerCommand, executeCommand: mocks.executeCommand },
@@ -74,11 +86,11 @@ class Signal<T> {
 const disposables: vscode.Disposable[] = [];
 const page = (id: string): ChatPage => ({ chats: [{ id, cwd: '/fixture', title: id, recencyAt: 1 }], nextCursor: null });
 
-async function setup() {
+async function setup(saved?: Scope | 'repository') {
   const context = {
     extension: { packageJSON: { version: '3.2.1' } },
     subscriptions: disposables,
-    workspaceState: { get: (_key: string, fallback: unknown) => fallback, update: mocks.updateScope },
+    workspaceState: { get: (key: string, fallback: unknown) => key === 'scope' ? saved : fallback, update: mocks.updateScope },
   } as unknown as vscode.ExtensionContext;
   const visibility = new Signal<void>();
   const expanded = new Signal<{ element: TreeNode }>();
@@ -125,8 +137,12 @@ async function setup() {
     mocks.promptScope.mockResolvedValueOnce({ value });
     return run('selectScope');
   };
+  const group = (value: Grouping) => {
+    mocks.promptScope.mockResolvedValueOnce({ value });
+    return run('selectGrouping');
+  };
   const dispose = () => disposables[0]?.dispose();
-  return { api, view, tree, rendered, ready, setVisible, run, search, pick, dispose, collapsed };
+  return { api, view, tree, rendered, ready, setVisible, run, search, pick, group, dispose, collapsed };
 }
 
 beforeEach(() => {
@@ -134,6 +150,9 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-11-23T12:00:00Z'));
   vi.clearAllMocks();
   mocks.list.mockReset().mockResolvedValue(page('thread-default'));
+  mocks.inspectDirectory.mockReset().mockResolvedValue({ kind: 'folder' });
+  mocks.checkThread.mockReset().mockImplementation(async id => page(id).chats[0]);
+  mocks.findRepositories.mockReset().mockResolvedValue(new Map());
   mocks.realpath.mockReset().mockImplementation(async value => value);
   mocks.registerCommand.mockReturnValue({ dispose() {} });
   mocks.updateScope.mockReset().mockResolvedValue(undefined);
@@ -149,11 +168,66 @@ test('all commands use the fork namespace and open focuses the fork view', async
   const fixture = await setup();
   expect(mocks.registerCommand.mock.calls.map(([id]) => id)).toEqual([
     'codexChatsList.open', 'codexChatsList.refresh', 'codexChatsList.selectScope',
-    'codexChatsList.showAll', 'codexChatsList.search', 'codexChatsList.clearSearch',
-    'codexChatsList.loadMore', 'codexChatsList.openConversation',
+    'codexChatsList.selectGrouping', 'codexChatsList.toggleFolders', 'codexChatsList.showAll',
+    'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.loadMore', 'codexChatsList.openConversation',
   ]);
   await fixture.run('open');
   expect(mocks.executeCommand).toHaveBeenCalledWith('codexChatsList.list.focus');
+});
+
+test('each range, grouping, title search and folder filter uses the same indexed history', async () => {
+  mocks.findRepositories.mockResolvedValue(new Map([
+    ['github.com/me/app', { key: 'github.com/me/app', root: '/fixture' }],
+    ['github.com/team/app', { key: 'github.com/me/app', root: '/fixture' }],
+  ]));
+  mocks.list.mockResolvedValueOnce({
+    chats: [
+      { id: 'thread-fork', cwd: '/moved/app', title: 'Fork migration', recencyAt: 2, repository: 'github.com/me/app' },
+      { id: 'thread-upstream', cwd: '/retired/worktree', title: 'Upstream migration', recencyAt: 1, repository: 'github.com/team/app' },
+      { id: 'thread-local', cwd: '/local', title: 'Local Git', recencyAt: 3, hasGit: true },
+      { id: 'thread-folder', cwd: '/fixture', title: 'Folder session', recencyAt: 4 },
+      { id: 'thread-unknown', cwd: '/unavailable', title: 'Unknown source', recencyAt: 5 },
+    ],
+    nextCursor: null,
+  });
+  mocks.inspectDirectory.mockImplementation(async cwd => cwd === '/local'
+    ? { kind: 'git', root: cwd, common: '/local/.git' }
+    : { kind: cwd === '/unavailable' ? 'unknown' : 'folder' });
+  const fixture = await setup('repository');
+  await fixture.ready();
+  const ids = () => fixture.tree.getChildren().flatMap(node => node.kind === 'project' ? node.group.chats.map(chat => chat.id) : []);
+  expect(fixture.api.snapshot()).toMatchObject({ scope: 'current', grouping: 'repository', indexed: true });
+  expect(ids()).toEqual(['thread-folder', 'thread-fork', 'thread-upstream']);
+  await fixture.pick('all');
+  expect(ids()).toContain('thread-local');
+  expect(ids()).toContain('thread-unknown');
+  await fixture.run('toggleFolders');
+  expect(ids()).not.toContain('thread-folder');
+  expect(ids()).toContain('thread-unknown');
+  expect(ids()).toContain('thread-local');
+  await fixture.search('migration');
+  expect(ids()).toEqual(['thread-fork', 'thread-upstream']);
+  await fixture.search(undefined);
+  expect(ids()).toEqual(['thread-fork', 'thread-upstream']);
+  await fixture.group('folder');
+  expect(ids()).toEqual(['thread-fork', 'thread-upstream']);
+  await fixture.pick('current');
+  expect(ids()).toHaveLength(0);
+  expect(mocks.list.mock.calls).toEqual([[undefined, '', null]]);
+});
+
+test('local Git resolves Current through its common directory with the folder filter on', async () => {
+  mocks.inspectDirectory.mockResolvedValue({ kind: 'git', root: '/fixture', common: '/fixture/.git' });
+  mocks.list.mockResolvedValueOnce({
+    chats: [{ id: 'thread-local', cwd: '/fixture/subdirectory', title: 'Local work', recencyAt: 20, hasGit: true }],
+    nextCursor: null,
+  });
+  const fixture = await setup();
+  await fixture.ready();
+  await fixture.run('toggleFolders');
+  const item = fixture.tree.getChildren()[0]!;
+  expect(fixture.tree.getTreeItem(item)).toMatchObject({ id: 'project:git:/fixture/.git' });
+  expect(item).toMatchObject({ group: { chats: [{ id: 'thread-local' }] } });
 });
 
 test.each([
@@ -164,8 +238,9 @@ test.each([
   mocks.cliPath = setting;
   const fixture = await setup();
   await fixture.ready();
-  const binary = mocks.construct.mock.calls.at(-1)?.[0];
-  expect(binary).toEqual(typeof expectedPath === 'string' ? expectedPath : expect.stringMatching(expectedPath));
+  expect(mocks.construct.mock.calls.at(-1)?.[0]).toEqual(
+    typeof expectedPath === 'string' ? expectedPath : expect.stringMatching(expectedPath),
+  );
   expect(fixture.api.snapshot().error).toBe('');
 });
 
@@ -179,310 +254,53 @@ test('a disposed tree ignores an outstanding response and cannot publish stale s
   const sent = fixture.rendered.mock.calls.length;
   response.resolve(page('thread-too-late'));
   await vi.advanceTimersByTimeAsync(0);
-  expect(fixture.api.snapshot()).toMatchObject({ ready: false, busy: false, count: 0 });
   expect(fixture.rendered).toHaveBeenCalledTimes(sent);
+  expect(mocks.dispose).toHaveBeenCalledOnce();
 });
 
-test('a slower old search cannot replace a newer result', async () => {
-  const older = Promise.withResolvers<ChatPage>();
-  mocks.list.mockReturnValueOnce(older.promise).mockResolvedValueOnce(page('thread-newer'));
-  const fixture = await setup();
-  await fixture.ready();
-  void fixture.search('newer');
-  await vi.advanceTimersByTimeAsync(0);
-  older.resolve(page('thread-older'));
-  await vi.advanceTimersByTimeAsync(0);
-  const state = fixture.rendered.mock.calls.at(-1)?.[0];
-  expect(state).toMatchObject({ search: 'newer', busy: false, count: 1, groups: [{ chats: [{ id: 'thread-newer' }] }] });
-});
-
-test('pagination waits for the first page and cursor of a changed search', async () => {
-  const first = Promise.withResolvers<ChatPage>();
-  mocks.list
-    .mockResolvedValueOnce({ ...page('thread-old'), nextCursor: 'old-cursor' })
-    .mockReturnValueOnce(first.promise)
-    .mockResolvedValueOnce(page('thread-new-second'));
-  const fixture = await setup();
-  await fixture.ready();
-  const pendingSearch = fixture.search('new');
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.list).toHaveBeenNthCalledWith(2, ['/fixture'], 'new', null);
-  await fixture.run('loadMore');
-  expect(mocks.list).toHaveBeenCalledTimes(2);
-  first.resolve({ ...page('thread-new-first'), nextCursor: 'new-cursor' });
-  await pendingSearch;
-  await fixture.run('loadMore');
-  expect(mocks.list).toHaveBeenNthCalledWith(3, ['/fixture'], 'new', 'new-cursor');
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({
-    groups: [{ chats: [{ id: 'thread-new-first' }, { id: 'thread-new-second' }] }],
-  });
-});
-
-test('a continuation uses the same resolved workspace paths as its first page', async () => {
-  mocks.realpath.mockResolvedValueOnce('/original').mockResolvedValue('/retargeted');
-  mocks.list
-    .mockResolvedValueOnce({ ...page('thread-first'), nextCursor: 'page-two' })
-    .mockResolvedValueOnce(page('thread-second'));
-  const fixture = await setup();
-  await fixture.ready();
-  void fixture.run('loadMore');
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.list).toHaveBeenNthCalledWith(1, ['/fixture', '/original'], '', null);
-  expect(mocks.list).toHaveBeenNthCalledWith(2, ['/fixture', '/original'], '', 'page-two');
-  expect(mocks.realpath).toHaveBeenCalledOnce();
-});
-
-test('a failed older request cannot dispose the client serving a newer result', async () => {
-  const older = Promise.withResolvers<ChatPage>();
-  mocks.list.mockReturnValueOnce(older.promise).mockResolvedValueOnce(page('thread-newer'));
-  const fixture = await setup();
-  await fixture.ready();
-  void fixture.search('newer');
-  await vi.advanceTimersByTimeAsync(0);
-  older.reject(new Error('old failure'));
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.dispose).not.toHaveBeenCalled();
-  expect(fixture.api.snapshot()).toMatchObject({ busy: false, count: 1, error: '' });
-});
-
-test('visible history updates automatically without clearing the existing list', async () => {
-  const initial: ChatPage = { chats: [...page('thread-kept').chats, ...page('thread-removed').chats], nextCursor: null };
-  const response = Promise.withResolvers<ChatPage>();
-  mocks.list.mockResolvedValueOnce(initial).mockReturnValueOnce(response.promise);
-  const fixture = await setup();
-  await fixture.ready();
-  const sent = fixture.rendered.mock.calls.length;
-  await vi.advanceTimersByTimeAsync(5_000);
-  expect(mocks.list).toHaveBeenCalledTimes(2);
-  expect(fixture.api.snapshot()).toMatchObject({ busy: false, count: 2 });
-  expect(fixture.rendered).toHaveBeenCalledTimes(sent);
-  const kept = { id: 'thread-kept', cwd: '/fixture', title: 'Renamed conversation', recencyAt: 20 };
-  response.resolve({ chats: [kept, ...page('thread-added').chats], nextCursor: null });
-  await vi.advanceTimersByTimeAsync(0);
-  expect(fixture.rendered).toHaveBeenCalledTimes(sent + 1);
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({
-    busy: false, count: 2, groups: [{ chats: [kept, { id: 'thread-added' }] }],
-  });
-});
-
-test('unchanged polling does not publish state or restart the list service', async () => {
-  const fixture = await setup();
-  await fixture.ready();
-  const sent = fixture.rendered.mock.calls.length;
-  await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.list).toHaveBeenCalledTimes(4);
-  expect(mocks.construct).toHaveBeenCalledOnce();
-  expect(fixture.rendered).toHaveBeenCalledTimes(sent);
-});
-
-test('the native tree starts on first reveal, pauses while hidden, and catches up on return', async () => {
+test('unchanged polling does not publish state and hidden views pause the index', async () => {
   const fixture = await setup();
   await vi.advanceTimersByTimeAsync(10_000);
   expect(mocks.list).not.toHaveBeenCalled();
   await fixture.ready();
+  const sent = fixture.rendered.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(mocks.list).toHaveBeenCalledTimes(4);
+  expect(fixture.rendered).toHaveBeenCalledTimes(sent);
   fixture.setVisible(false);
   await vi.advanceTimersByTimeAsync(10_000);
-  expect(mocks.list).toHaveBeenCalledOnce();
-  mocks.list.mockResolvedValueOnce(page('thread-returned'));
+  expect(mocks.list).toHaveBeenCalledTimes(4);
   fixture.setVisible(true);
   await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.list).toHaveBeenCalledTimes(2);
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({ groups: [{ chats: [{ id: 'thread-returned' }] }] });
-  await vi.advanceTimersByTimeAsync(5_000);
-  expect(mocks.list).toHaveBeenCalledTimes(3);
-  fixture.dispose();
-  fixture.setVisible(false);
-  fixture.setVisible(true);
-  await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.list).toHaveBeenCalledTimes(3);
+  expect(mocks.list).toHaveBeenCalledTimes(5);
 });
 
-test('a revealed tree keeps all loaded pages while visibility refresh runs', async () => {
-  const first = Promise.withResolvers<ChatPage>();
-  mocks.list
-    .mockResolvedValueOnce({ ...page('thread-old-first'), nextCursor: 'old-second' })
-    .mockResolvedValueOnce(page('thread-old-second'))
-    .mockReturnValueOnce(first.promise)
-    .mockResolvedValueOnce(page('thread-new-second'));
-  const fixture = await setup();
-  await fixture.ready();
-  void fixture.run('loadMore');
-  await vi.advanceTimersByTimeAsync(0);
-  fixture.setVisible(false);
-  fixture.setVisible(true);
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.list).toHaveBeenCalledTimes(3);
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({
-    busy: false, count: 2, groups: [{ chats: [{ id: 'thread-old-first' }, { id: 'thread-old-second' }] }],
+test('local pagination preserves cached results without touching the Codex connection', async () => {
+  mocks.list.mockResolvedValueOnce({
+    chats: Array.from({ length: 60 }, (_, i) => ({ ...page('thread-' + i).chats[0]!, recencyAt: i + 1 })),
+    nextCursor: null,
   });
-  first.resolve({ ...page('thread-new-first'), nextCursor: 'new-second' });
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.list).toHaveBeenNthCalledWith(4, ['/fixture'], '', 'new-second');
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({
-    count: 2, groups: [{ chats: [{ id: 'thread-new-first' }, { id: 'thread-new-second' }] }],
-  });
-});
-
-test('a slow foreground load and a slow poll never start overlapping polls', async () => {
-  const initial = Promise.withResolvers<ChatPage>();
-  const background = Promise.withResolvers<ChatPage>();
-  mocks.list.mockReturnValueOnce(initial.promise).mockReturnValueOnce(background.promise);
   const fixture = await setup();
   await fixture.ready();
-  await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.list).toHaveBeenCalledOnce();
-  initial.resolve(page('thread-initial'));
-  await vi.advanceTimersByTimeAsync(5_000);
-  expect(mocks.list).toHaveBeenCalledTimes(2);
-  fixture.setVisible(false);
-  fixture.setVisible(true);
-  await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.list).toHaveBeenCalledTimes(2);
-  background.resolve(page('thread-background'));
-  await vi.advanceTimersByTimeAsync(5_000);
-  expect(mocks.list).toHaveBeenCalledTimes(3);
-});
-
-test('automatic refresh rebuilds all loaded pages atomically and keeps the new pagination cursor', async () => {
-  const second = Promise.withResolvers<ChatPage>();
-  mocks.list
-    .mockResolvedValueOnce({ ...page('thread-old-first'), nextCursor: 'old-second' })
-    .mockResolvedValueOnce({ ...page('thread-old-second'), nextCursor: 'old-third' })
-    .mockResolvedValueOnce({ ...page('thread-new-first'), nextCursor: 'new-second' })
-    .mockReturnValueOnce(second.promise);
-  const fixture = await setup();
-  await fixture.ready();
-  void fixture.run('loadMore');
-  await vi.advanceTimersByTimeAsync(0);
-  const sent = fixture.rendered.mock.calls.length;
-  await vi.advanceTimersByTimeAsync(5_000);
-  expect(mocks.list).toHaveBeenNthCalledWith(3, ['/fixture'], '', null);
-  expect(mocks.list).toHaveBeenNthCalledWith(4, ['/fixture'], '', 'new-second');
-  expect(fixture.api.snapshot()).toMatchObject({ busy: false, count: 2 });
-  expect(fixture.rendered).toHaveBeenCalledTimes(sent);
-  second.resolve({ ...page('thread-new-second'), nextCursor: 'new-third' });
-  await vi.advanceTimersByTimeAsync(0);
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({
-    hasMore: true, count: 2, groups: [{ chats: [{ id: 'thread-new-first' }, { id: 'thread-new-second' }] }],
-  });
-  void fixture.run('loadMore');
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.list).toHaveBeenLastCalledWith(['/fixture'], '', 'new-third');
-});
-
-test('a shorter refreshed history removes old pages and stops at the end of the new list', async () => {
-  mocks.list
-    .mockResolvedValueOnce({ ...page('thread-first'), nextCursor: 'second' })
-    .mockResolvedValueOnce(page('thread-second'))
-    .mockResolvedValueOnce(page('thread-only'));
-  const fixture = await setup();
-  await fixture.ready();
-  void fixture.run('loadMore');
-  await vi.advanceTimersByTimeAsync(5_000);
-  expect(mocks.list).toHaveBeenCalledTimes(3);
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({
-    hasMore: false, count: 1, groups: [{ chats: [{ id: 'thread-only' }] }],
-  });
-});
-
-test('a user pagination request supersedes a slow automatic refresh', async () => {
-  const background = Promise.withResolvers<ChatPage>();
-  mocks.list
-    .mockResolvedValueOnce({ ...page('thread-first'), nextCursor: 'second' })
-    .mockReturnValueOnce(background.promise)
-    .mockResolvedValueOnce(page('thread-second'));
-  const fixture = await setup();
-  await fixture.ready();
-  await vi.advanceTimersByTimeAsync(5_000);
-  void fixture.run('loadMore');
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.list).toHaveBeenLastCalledWith(['/fixture'], '', 'second');
-  const sent = fixture.rendered.mock.calls.length;
-  background.resolve(page('thread-stale'));
-  await vi.advanceTimersByTimeAsync(0);
-  expect(fixture.api.snapshot()).toMatchObject({ busy: false, count: 2 });
-  expect(fixture.rendered).toHaveBeenCalledTimes(sent);
-});
-
-test('a cancelled title prompt leaves the current filter and cursor in place', async () => {
-  mocks.list
-    .mockResolvedValueOnce(page('thread-initial'))
-    .mockResolvedValueOnce({ ...page('thread-matching'), nextCursor: 'page-two' })
-    .mockResolvedValueOnce(page('thread-second'));
-  const fixture = await setup();
-  await fixture.ready();
-  await fixture.search('matching');
-  await fixture.search(undefined);
-  expect(mocks.promptSearch).toHaveBeenLastCalledWith(expect.objectContaining({ value: 'matching' }));
-  expect(mocks.list).toHaveBeenCalledTimes(2);
+  expect(fixture.view.badge?.value).toBe(50);
+  expect(fixture.tree.getChildren().at(-1)?.kind).toBe('more');
   await fixture.run('loadMore');
-  expect(mocks.list).toHaveBeenLastCalledWith(['/fixture'], 'matching', 'page-two');
+  expect(fixture.view.badge?.value).toBe(60);
+  expect(mocks.list).toHaveBeenCalledOnce();
 });
 
-test('switching scope refreshes immediately without waiting for workspace preferences', async () => {
-  const background = Promise.withResolvers<ChatPage>();
-  const saved = Promise.withResolvers<void>();
-  mocks.list.mockResolvedValueOnce(page('thread-current')).mockReturnValueOnce(background.promise)
-    .mockResolvedValueOnce(page('thread-all'));
-  mocks.updateScope.mockReturnValueOnce(saved.promise);
+test('a failed background query retains indexed results and retries', async () => {
   const fixture = await setup();
   await fixture.ready();
+  mocks.list.mockRejectedValueOnce(new Error('temporary failure'));
   await vi.advanceTimersByTimeAsync(5_000);
-  void fixture.pick('all');
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.list).toHaveBeenLastCalledWith(undefined, '', null);
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({
-    scope: 'all', groups: [{ chats: [{ id: 'thread-all' }] }],
-  });
-  const sent = fixture.rendered.mock.calls.length;
-  background.resolve(page('thread-stale-current'));
-  saved.resolve();
-  await vi.advanceTimersByTimeAsync(0);
-  expect(fixture.rendered).toHaveBeenCalledTimes(sent);
-  expect(mocks.list).toHaveBeenCalledTimes(3);
-});
-
-test('a failed background page preserves the entire list and retries on the next cycle', async () => {
-  mocks.list
-    .mockResolvedValueOnce({ ...page('thread-first'), nextCursor: 'second' })
-    .mockResolvedValueOnce(page('thread-second'))
-    .mockResolvedValueOnce({ ...page('thread-partial'), nextCursor: 'new-second' })
-    .mockRejectedValueOnce(new Error('temporary failure'))
-    .mockResolvedValueOnce(page('thread-recovered'));
-  const fixture = await setup();
-  await fixture.ready();
-  void fixture.run('loadMore');
+  expect(fixture.api.snapshot()).toMatchObject({ count: 1, error: 'temporary failure' });
   await vi.advanceTimersByTimeAsync(5_000);
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({
-    busy: false, error: 'temporary failure', count: 2,
-    groups: [{ chats: [{ id: 'thread-first' }, { id: 'thread-second' }] }],
-  });
-  expect(mocks.dispose).toHaveBeenCalledOnce();
-  await vi.advanceTimersByTimeAsync(5_000);
-  expect(mocks.construct).toHaveBeenCalledTimes(2);
-  expect(mocks.list).toHaveBeenLastCalledWith(['/fixture'], '', null);
-  expect(fixture.rendered.mock.calls.at(-1)?.[0]).toMatchObject({
-    error: '', count: 1, groups: [{ chats: [{ id: 'thread-recovered' }] }],
-  });
-});
-
-test('closing during a poll prevents publication and does not schedule another poll', async () => {
-  const background = Promise.withResolvers<ChatPage>();
-  mocks.list.mockResolvedValueOnce(page('thread-initial')).mockReturnValueOnce(background.promise);
-  const fixture = await setup();
-  await fixture.ready();
-  await vi.advanceTimersByTimeAsync(5_000);
-  fixture.dispose();
-  const sent = fixture.rendered.mock.calls.length;
-  background.resolve(page('thread-late'));
-  await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.list).toHaveBeenCalledTimes(2);
-  expect(fixture.rendered).toHaveBeenCalledTimes(sent);
-  expect(vi.getTimerCount()).toBe(0);
+  expect(fixture.api.snapshot()).toMatchObject({ count: 1, error: '' });
 });
 
 test('uses stable node identity and isolates search expansion from the saved tree', async () => {
-  const fixture = await setup();
+  const fixture = await setup('current');
   await fixture.ready();
   const initial = fixture.tree.getChildren()[0];
   expect(fixture.tree.getTreeItem(initial!)).toMatchObject({ id: 'project:/fixture', collapsibleState: 2 });
@@ -499,20 +317,22 @@ test('uses stable node identity and isolates search expansion from the saved tre
   });
 });
 
-test('exposes conversation metadata through native rows and opens a loaded ID', async () => {
+test('validates the selected ID before navigating and removes a confirmed archived entry', async () => {
   const fixture = await setup();
   await fixture.ready();
   const group = fixture.tree.getChildren()[0]!;
-  const chat = fixture.tree.getTreeItem(fixture.tree.getChildren(group)[0]!);
-  expect(chat).toMatchObject({
+  expect(fixture.tree.getTreeItem(fixture.tree.getChildren(group)[0]!)).toMatchObject({
     id: 'chat:thread-default',
-    label: 'thread-default',
     tooltip: expect.stringContaining('Path: /fixture'),
-    command: { command: 'codexChatsList.openConversation', arguments: ['thread-default'] },
   });
   await fixture.run('openConversation', 'thread-default');
   await fixture.run('openConversation', 'missing');
+  expect(mocks.checkThread).toHaveBeenCalledExactlyOnceWith('thread-default');
   expect(mocks.openConversation).toHaveBeenCalledExactlyOnceWith('thread-default');
+  mocks.checkThread.mockResolvedValueOnce(undefined);
+  await fixture.run('openConversation', 'thread-default');
+  expect(fixture.api.snapshot().count).toBe(0);
+  expect(mocks.openConversation).toHaveBeenCalledTimes(1);
 });
 
 test('refreshes time labels on the minute only while the tree is visible', async () => {
@@ -525,22 +345,4 @@ test('refreshes time labels on the minute only while the tree is visible', async
   const hidden = fixture.rendered.mock.calls.length;
   await vi.advanceTimersByTimeAsync(60_000);
   expect(fixture.rendered).toHaveBeenCalledTimes(hidden);
-});
-
-test('shows paths for same-named projects and exposes pagination as a native row', async () => {
-  mocks.list.mockResolvedValueOnce({
-    chats: [
-      { id: 'thread-team', cwd: '/team/app', title: 'Team project', recencyAt: 1 },
-      { id: 'thread-personal', cwd: '/personal/app', title: 'Personal project', recencyAt: 2 },
-    ],
-    nextCursor: 'more',
-  });
-  const fixture = await setup();
-  await fixture.ready();
-  const items = fixture.tree.getChildren().map(node => fixture.tree.getTreeItem(node));
-  expect(items).toEqual([
-    expect.objectContaining({ id: 'project:/personal/app', label: 'app', description: '/personal/app · 1 chat' }),
-    expect.objectContaining({ id: 'project:/team/app', label: 'app', description: '/team/app · 1 chat' }),
-    expect.objectContaining({ id: 'more', command: { command: 'codexChatsList.loadMore', title: 'Load more conversations' } }),
-  ]);
 });

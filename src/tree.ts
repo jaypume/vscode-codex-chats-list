@@ -107,7 +107,12 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       const count = t(group.chats.length === 1 ? 'chatsOne' : 'chatsOther', {
         count: group.chats.length,
       });
-      item.description = [group.current && t('currentBadge'), node.duplicate && group.cwd, count]
+      item.description = [
+        group.current && t('currentBadge'),
+        group.unknown && t('unknownSource'),
+        node.duplicate && group.cwd,
+        count,
+      ]
         .filter(Boolean)
         .join(' · ');
       item.tooltip = group.cwd;

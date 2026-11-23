@@ -4,6 +4,8 @@
   "command.open": "Open Project Chats",
   "command.refresh": "Refresh Conversations",
   "command.scope": "Change Conversation Scope",
+  "command.grouping": "Group Conversations",
+  "command.folders": "Toggle Non-Git Folders",
   "command.search": "Search Conversation Titles",
   "command.clearSearch": "Clear Conversation Search",
   "welcome.noWorkspace": "Open a project folder to see its conversations.\n[View All Projects](command:codexChatsList.showAll)",
