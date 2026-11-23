@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -68,17 +68,17 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "codexProjectChats",
+          "id": "codexChatsList",
           "title": "%viewContainer.title%",
           "icon": "media/projects.svg"
         }
       ]
     },
     "views": {
-      "codexProjectChats": [
+      "codexChatsList": [
         {
           "type": "tree",
-          "id": "codexProjectChats.list",
+          "id": "codexChatsList.list",
           "name": "%view.title%",
           "contextualTitle": "Codex Chats List"
         }
@@ -86,36 +86,36 @@
     },
     "viewsWelcome": [
       {
-        "view": "codexProjectChats.list",
+        "view": "codexChatsList.list",
         "contents": "%welcome.noWorkspace%"
       }
     ],
     "commands": [
       {
-        "command": "codexProjectChats.open",
+        "command": "codexChatsList.open",
         "title": "%command.open%",
         "category": "Codex Chats List"
       },
       {
-        "command": "codexProjectChats.refresh",
+        "command": "codexChatsList.refresh",
         "title": "%command.refresh%",
         "category": "Codex Chats List",
         "icon": "$(refresh)"
       },
       {
-        "command": "codexProjectChats.selectScope",
+        "command": "codexChatsList.selectScope",
         "title": "%command.scope%",
         "category": "Codex Chats List",
         "icon": "$(filter)"
       },
       {
-        "command": "codexProjectChats.search",
+        "command": "codexChatsList.search",
         "title": "%command.search%",
         "category": "Codex Chats List",
         "icon": "$(search)"
       },
       {
-        "command": "codexProjectChats.clearSearch",
+        "command": "codexChatsList.clearSearch",
         "title": "%command.clearSearch%",
         "category": "Codex Chats List",
         "icon": "$(clear-all)"
@@ -124,37 +124,37 @@
     "menus": {
       "view/title": [
         {
-          "command": "codexProjectChats.selectScope",
-          "when": "view == codexProjectChats.list",
+          "command": "codexChatsList.selectScope",
+          "when": "view == codexChatsList.list",
           "group": "navigation@1"
         },
         {
-          "command": "codexProjectChats.search",
-          "when": "view == codexProjectChats.list",
+          "command": "codexChatsList.search",
+          "when": "view == codexChatsList.list",
           "group": "navigation@2"
         },
         {
-          "command": "codexProjectChats.clearSearch",
-          "when": "view == codexProjectChats.list && codexProjectChats.hasSearch",
+          "command": "codexChatsList.clearSearch",
+          "when": "view == codexChatsList.list && codexChatsList.hasSearch",
           "group": "navigation@3"
         },
         {
-          "command": "codexProjectChats.refresh",
-          "when": "view == codexProjectChats.list",
+          "command": "codexChatsList.refresh",
+          "when": "view == codexChatsList.list",
           "group": "navigation@4"
         }
       ],
       "commandPalette": [
         {
-          "command": "codexProjectChats.clearSearch",
-          "when": "codexProjectChats.hasSearch"
+          "command": "codexChatsList.clearSearch",
+          "when": "codexChatsList.hasSearch"
         }
       ]
     },
     "configuration": {
       "title": "Codex Chats List",
       "properties": {
-        "codexProjectChats.cliPath": {
+        "codexChatsList.cliPath": {
           "type": "string",
           "default": "",
           "scope": "machine",
@@ -164,7 +164,7 @@
     }
   },
   "activationEvents": [
-    "onView:codexProjectChats.list"
+    "onView:codexChatsList.list"
   ],
   "extensionDependencies": [
     "openai.chatgpt"

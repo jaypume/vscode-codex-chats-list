@@ -2,13 +2,13 @@
 
 [English](README.md) · 简体中文
 
-按项目浏览已有的 Codex 对话，并在官方侧栏中继续。1.2.0 使用 VS Code 原生项目树，支持标题筛选、分页和刷新。
+按项目浏览已有的 Codex 对话，并在官方侧栏中继续。VS Code 原生项目树支持标题筛选、分页和刷新。
 
 ## 安装和浏览
 
 1. 安装并登录 [官方 Codex 扩展](https://marketplace.visualstudio.com/items?itemName=openai.chatgpt)。
 2. 在扩展商店搜索 `@id:pujie.codex-chats-list` 安装 **Codex Chats List**。使用离线包时，选择 **扩展 → … → 从 VSIX 安装**。
-3. 打开项目文件夹，点击活动栏的 **Codex 项目对话**。也可在命令面板执行 **Codex Chats List: 打开项目对话**。
+3. 打开项目文件夹，点击活动栏的 **Codex 对话列表**。也可在命令面板执行 **Codex Chats List: 打开项目对话**。
 4. 展开项目并选择对话，官方 Codex 侧栏会在原有位置打开对应会话。
 
 [Marketplace 商品页](https://marketplace.visualstudio.com/items?itemName=pujie.codex-chats-list) · [反馈问题](https://github.com/jaypume/vscode-codex-chats-list/issues)
@@ -43,13 +43,13 @@ Codex 在分页前按标题和目录筛选。每页最多加载 50 条，计数�
 | 情况 | 处理方式 |
 | --- | --- |
 | 当前项目没有结果 | 会话的工作目录须与工作区根目录匹配。子目录或 worktree 下启动的对话可在 **全部项目** 中查找。 |
-| 找不到 Codex | 启用官方扩展，或在 `codexProjectChats.cliPath` 中指定当前宿主的可执行文件绝对路径。 |
+| 找不到 Codex | 启用官方扩展，或在 `codexChatsList.cliPath` 中指定当前宿主的可执行文件绝对路径。 |
 | 打开对话失败 | 先打开官方 Codex 侧栏再试。跳转依赖官方扩展已有的 URI 路径，反馈时请附上两个扩展的版本。 |
 | WSL、SSH 或容器 | 在远程工作区安装两个扩展。会话记录按宿主读取。Windows 将 Codex 转发到 WSL 时，请打开 WSL 工作区。 |
 
 扩展通过本地官方 `codex app-server` 的 `thread/list` 读取会话 ID、标题、工作目录和最近对话时间，并启用 `useStateDbOnly`。没有标题时可使用服务提供的首条消息摘要。官方可执行文件管理自己的运行状态和日志。跳转使用官方扩展的 `/local/<id>` URI。
 
-如果已安装上游扩展或早期原型，请先停用它们，以免出现重复入口。Codex 独立保存会话。
+Codex Chats List 1.2.1 可以与 Codex Project Chats 同时启用。未配置 `codexChatsList.cliPath` 时，fork 读取旧的 `codexProjectChats.cliPath`。把新设置显式设为空字符串即可使用官方扩展内置的可执行文件。如果给 fork 的打开或刷新命令绑定了快捷键，请改绑 `codexChatsList.open` 或 `codexChatsList.refresh`。可将新的活动栏入口拖回习惯的位置。
 
 ## 开发与反馈
 

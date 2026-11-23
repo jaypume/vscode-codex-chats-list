@@ -11,8 +11,12 @@ with ZipFile(archive) as package:
     packed = json.loads(package.read("extension/package.json"))
     for field in ("name", "publisher", "displayName", "version", "repository", "homepage", "bugs", "main"):
         assert packed[field] == manifest[field], f"Manifest mismatch: {field}"
-    views = packed["contributes"]["views"]["codexProjectChats"]
-    assert len(views) == 1 and views[0]["id"] == "codexProjectChats.list" and views[0]["type"] == "tree"
+    contributions = packed["contributes"]
+    assert "codexProjectChats" not in json.dumps(contributions), "Upstream contribution ID"
+    assert "onView:codexChatsList.list" in packed["activationEvents"]
+    assert "codexProjectChats" not in json.dumps(packed["activationEvents"]), "Upstream activation event"
+    views = contributions["views"]["codexChatsList"]
+    assert len(views) == 1 and views[0]["id"] == "codexChatsList.list" and views[0]["type"] == "tree"
     for name in ("extension/readme.md", "extension/changelog.md", "extension/LICENSE.txt",
                  "extension/README.zh-CN.md", "extension/SUPPORT.md", "extension/media/icon.png",
                  "extension/dist/extension/extension.js", "extension/dist/extension/tree.js",
@@ -24,6 +28,7 @@ with ZipFile(archive) as package:
             "extension/package.nls.json", "extension/package.nls.zh.json", "extension/package.nls.zh-cn.json"}
     translations = [json.loads(package.read(name)) for name in sorted(docs) if '/package.nls' in name]
     assert all(set(bundle) == set(translations[0]) for bundle in translations), "Incomplete packaged translations"
+    assert all("command:codexChatsList.showAll" in bundle["welcome.noWorkspace"] for bundle in translations)
     for name in names:
         assert name in ("extension.vsixmanifest", "[Content_Types].xml") or name in docs or name.startswith(allowed), f"Unexpected file: {name}"
     readme = package.read("extension/readme.md").decode()

@@ -17,7 +17,7 @@ exports.run = async () => {
   const extension = vscode.extensions.getExtension(`${manifest.publisher}.${manifest.name}`);
   assert(extension);
   const api = await extension.activate();
-  await vscode.commands.executeCommand('codexProjectChats.open');
+  await vscode.commands.executeCommand('codexChatsList.open');
   const state = await until(() => { const s = api.snapshot(); return s.ready && !s.busy && s; });
   assert.equal(state.error, '');
   assert.equal(state.scope, 'current');

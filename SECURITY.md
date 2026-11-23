@@ -10,4 +10,4 @@ Use [GitHub private vulnerability reporting](https://github.com/jaypume/vscode-c
 
 Describe the affected version, attack requirements, impact, and a minimal reproduction using synthetic data. Do not send real Codex databases or authentication material.
 
-The extension reads local conversation metadata through the official app-server and forwards navigation to the official extension. A malicious executable configured through `codexProjectChats.cliPath`, an untrusted official extension, and vulnerabilities in upstream software need separate assessment. Report upstream-only problems through the [upstream security policy](https://github.com/cixiangtao/codex-project-chats/security/policy).
+The extension reads local conversation metadata through the official app-server and forwards navigation to the official extension. A malicious executable configured through `codexChatsList.cliPath` or its legacy fallback, an untrusted official extension, and vulnerabilities in upstream software need separate assessment. Report upstream-only problems through the [upstream security policy](https://github.com/cixiangtao/codex-project-chats/security/policy).

@@ -2,7 +2,7 @@
 
 English · [简体中文](README.zh-CN.md)
 
-Browse Codex conversations by project, then continue in the official Codex sidebar. Version 1.2.0 uses a native VS Code tree with project groups, title search, and pagination.
+Browse Codex conversations by project, then continue in the official Codex sidebar. The native VS Code tree supports project groups, title search, and pagination.
 
 ## Install and browse
 
@@ -43,13 +43,13 @@ The manifest requires VS Code 1.100 or newer. The extension follows the VS Code 
 | Situation | Guidance |
 | --- | --- |
 | Empty current-project tree | The saved working directory must match a workspace root. Select **All projects** for sessions started in a subdirectory or worktree. |
-| Codex binary unavailable | Enable the official extension or set `codexProjectChats.cliPath` to an absolute executable path on the current host. |
+| Codex binary unavailable | Enable the official extension or set `codexChatsList.cliPath` to an absolute executable path on the current host. |
 | Opening a conversation fails | Open the official Codex sidebar and retry. Include both extension versions when reporting the issue, since the navigation URI comes from the official extension. |
 | WSL, SSH, or a container | Install both extensions in the remote workspace. History stays on each host. For Windows with Codex running in WSL, open the project in a WSL window. |
 
 The extension reads conversation IDs, titles, working directories, and recent conversation times from the local bundled `codex app-server`. It uses `thread/list` with `useStateDbOnly`. When a title is missing, the server's first-message preview can supply the label. The official executable manages its internal state and logs. Navigation uses the official extension's existing `/local/<id>` URI handler.
 
-Disable the upstream extension or its old prototype before enabling Codex Chats List to avoid duplicate views. Codex stores conversations independently.
+Codex Chats List 1.2.1 can run alongside Codex Project Chats. When `codexChatsList.cliPath` is unset, the fork reads the previous `codexProjectChats.cliPath` value. Set the new key to an empty string to use the official extension's bundled executable. If you assigned a shortcut to the fork's open or refresh command, update it to `codexChatsList.open` or `codexChatsList.refresh`. You can move the new activity bar entry to your preferred position.
 
 ## Development and support
 

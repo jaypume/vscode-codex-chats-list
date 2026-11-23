@@ -12,10 +12,17 @@ const OFFICIAL_ID = 'openai.chatgpt';
 const AUTO_REFRESH_MS = 5_000;
 const MINUTE_MS = 60_000;
 const SEARCH_LIMIT = 200;
+const LEGACY_CONFIG_SECTION = 'codexProjectChats';
 type LoadMode = 'replace' | 'append' | 'poll';
 
+function ownCliPath(): string | undefined {
+  const setting = vscode.workspace.getConfiguration('codexChatsList').inspect<string>('cliPath');
+  return setting?.workspaceFolderValue ?? setting?.workspaceValue ?? setting?.globalValue;
+}
+
 async function getBinary(): Promise<string> {
-  const configured = vscode.workspace.getConfiguration('codexProjectChats').get<string>('cliPath', '').trim();
+  const configured = (ownCliPath()
+    ?? vscode.workspace.getConfiguration(LEGACY_CONFIG_SECTION).get<string>('cliPath', '')).trim();
   if (configured) {
     if (!path.isAbsolute(configured)) throw new Error(t('errorAbsolutePath'));
     await access(configured);
@@ -127,7 +134,7 @@ class CodexChatsListView implements vscode.Disposable {
     const search = value.slice(0, SEARCH_LIMIT).trim();
     if (search === this.search || this.disposed) return;
     this.search = search;
-    void vscode.commands.executeCommand('setContext', 'codexProjectChats.hasSearch', Boolean(search));
+    void vscode.commands.executeCommand('setContext', 'codexChatsList.hasSearch', Boolean(search));
     await this.refresh();
   }
 
@@ -286,23 +293,25 @@ class CodexChatsListView implements vscode.Disposable {
   }
 }
 
-/** Keep the published view ID to preserve access through the existing sidebar entry. */
 export function activate(context: vscode.ExtensionContext) {
   const provider = new CodexChatsListView(context);
   const view = vscode.window.createTreeView(VIEW_ID, { treeDataProvider: provider.tree, showCollapseAll: true });
   context.subscriptions.push(provider,
     view,
-    vscode.commands.registerCommand('codexProjectChats.open', () => vscode.commands.executeCommand(`${VIEW_ID}.focus`)),
-    vscode.commands.registerCommand('codexProjectChats.refresh', () => provider.refresh()),
-    vscode.commands.registerCommand('codexProjectChats.selectScope', () => provider.pickScope()),
-    vscode.commands.registerCommand('codexProjectChats.showAll', () => provider.setScope('all')),
-    vscode.commands.registerCommand('codexProjectChats.search', () => provider.promptSearch()),
-    vscode.commands.registerCommand('codexProjectChats.clearSearch', () => provider.setSearch('')),
+    vscode.commands.registerCommand('codexChatsList.open', () => vscode.commands.executeCommand(`${VIEW_ID}.focus`)),
+    vscode.commands.registerCommand('codexChatsList.refresh', () => provider.refresh()),
+    vscode.commands.registerCommand('codexChatsList.selectScope', () => provider.pickScope()),
+    vscode.commands.registerCommand('codexChatsList.showAll', () => provider.setScope('all')),
+    vscode.commands.registerCommand('codexChatsList.search', () => provider.promptSearch()),
+    vscode.commands.registerCommand('codexChatsList.clearSearch', () => provider.setSearch('')),
     vscode.commands.registerCommand(LOAD_MORE, () => provider.more()),
     vscode.commands.registerCommand(OPEN_CONVERSATION, (id: string) => provider.open(id)),
     vscode.workspace.onDidChangeWorkspaceFolders(() => { void provider.refreshIfLoaded(); }),
     vscode.workspace.onDidChangeConfiguration(event => {
-      if (event.affectsConfiguration('codexProjectChats.cliPath')) void provider.refreshIfLoaded();
+      if (event.affectsConfiguration('codexChatsList.cliPath')
+        || (event.affectsConfiguration(`${LEGACY_CONFIG_SECTION}.cliPath`) && ownCliPath() === undefined)) {
+        void provider.refreshIfLoaded();
+      }
     }));
   provider.attach(view);
   return { snapshot: () => provider.snapshot() };

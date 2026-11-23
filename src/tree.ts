@@ -4,9 +4,9 @@ import { createLocalizer, localization } from './i18n';
 import type { Chat, ProjectGroup, Scope } from './model';
 import { createTimeFormatter } from './time';
 
-export const VIEW_ID = 'codexProjectChats.list';
-export const OPEN_CONVERSATION = 'codexProjectChats.openConversation';
-export const LOAD_MORE = 'codexProjectChats.loadMore';
+export const VIEW_ID = 'codexChatsList.list';
+export const OPEN_CONVERSATION = 'codexChatsList.openConversation';
+export const LOAD_MORE = 'codexChatsList.loadMore';
 
 type ProjectNode = {
   kind: 'project';

@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   promptSearch: vi.fn<(options: vscode.InputBoxOptions) => Promise<string | undefined>>(),
   realpath: vi.fn<(path: string) => Promise<string>>(),
   updateScope: vi.fn<(key: string, value: unknown) => Promise<void>>(),
+  cliPath: undefined as string | undefined,
+  legacyCliPath: '/fixture/codex',
 }));
 vi.mock('../src/client', () => ({ CodexClient: class {
   constructor(...args: unknown[]) { mocks.construct(...args); }
@@ -25,9 +27,13 @@ vi.mock('../src/routing', () => ({ openInCodex: mocks.openConversation }));
 vi.mock('node:fs/promises', () => ({ access: async () => {}, realpath: mocks.realpath }));
 vi.mock('vscode', () => ({
   env: { language: 'en' },
+  extensions: { getExtension: () => ({ extensionPath: '/fixture/official' }) },
   workspace: {
     workspaceFolders: [{ uri: { scheme: 'file', fsPath: '/fixture' } }],
-    getConfiguration: () => ({ get: () => '/fixture/codex' }),
+    getConfiguration: (section: string) => ({
+      get: () => section === 'codexProjectChats' ? mocks.legacyCliPath : false,
+      inspect: () => ({ globalValue: mocks.cliPath, defaultValue: '' }),
+    }),
     onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
     onDidChangeConfiguration: () => ({ dispose() {} }),
   },
@@ -87,7 +93,7 @@ async function setup() {
   mocks.createTree.mockReturnValue(view);
   const api = activate(context);
   const tree = mocks.createTree.mock.calls.at(-1)?.[1].treeDataProvider as ChatTree;
-  expect(mocks.createTree).toHaveBeenLastCalledWith('codexProjectChats.list', expect.objectContaining({ showCollapseAll: true }));
+  expect(mocks.createTree).toHaveBeenLastCalledWith('codexChatsList.list', expect.objectContaining({ showCollapseAll: true }));
   const rendered = vi.fn();
   disposables.push(tree.onDidChangeTreeData(() => {
     const nodes = tree.getChildren();
@@ -99,7 +105,7 @@ async function setup() {
     });
   }));
   const run = async (command: string, ...args: unknown[]) => {
-    const handler = mocks.registerCommand.mock.calls.find(([id]) => id === `codexProjectChats.${command}`)?.[1];
+    const handler = mocks.registerCommand.mock.calls.find(([id]) => id === `codexChatsList.${command}`)?.[1];
     if (!handler) throw new Error(`Unregistered command: ${command}`);
     await handler(...args);
   };
@@ -131,10 +137,36 @@ beforeEach(() => {
   mocks.realpath.mockReset().mockImplementation(async value => value);
   mocks.registerCommand.mockReturnValue({ dispose() {} });
   mocks.updateScope.mockReset().mockResolvedValue(undefined);
+  mocks.cliPath = undefined;
+  mocks.legacyCliPath = '/fixture/codex';
 });
 afterEach(() => {
   for (const disposable of disposables.splice(0)) disposable.dispose();
   vi.useRealTimers();
+});
+
+test('all commands use the fork namespace and open focuses the fork view', async () => {
+  const fixture = await setup();
+  expect(mocks.registerCommand.mock.calls.map(([id]) => id)).toEqual([
+    'codexChatsList.open', 'codexChatsList.refresh', 'codexChatsList.selectScope',
+    'codexChatsList.showAll', 'codexChatsList.search', 'codexChatsList.clearSearch',
+    'codexChatsList.loadMore', 'codexChatsList.openConversation',
+  ]);
+  await fixture.run('open');
+  expect(mocks.executeCommand).toHaveBeenCalledWith('codexChatsList.list.focus');
+});
+
+test.each([
+  [undefined, '/fixture/codex'],
+  [' /fixture/fork-codex ', '/fixture/fork-codex'],
+  ['', /[\\/]official[\\/]bin[\\/]/],
+])('selects the CLI when the fork setting is %j', async (setting, expectedPath) => {
+  mocks.cliPath = setting;
+  const fixture = await setup();
+  await fixture.ready();
+  const binary = mocks.construct.mock.calls.at(-1)?.[0];
+  expect(binary).toEqual(typeof expectedPath === 'string' ? expectedPath : expect.stringMatching(expectedPath));
+  expect(fixture.api.snapshot().error).toBe('');
 });
 
 test('a disposed tree ignores an outstanding response and cannot publish stale state', async () => {
@@ -476,7 +508,7 @@ test('exposes conversation metadata through native rows and opens a loaded ID', 
     id: 'chat:thread-default',
     label: 'thread-default',
     tooltip: expect.stringContaining('Path: /fixture'),
-    command: { command: 'codexProjectChats.openConversation', arguments: ['thread-default'] },
+    command: { command: 'codexChatsList.openConversation', arguments: ['thread-default'] },
   });
   await fixture.run('openConversation', 'thread-default');
   await fixture.run('openConversation', 'missing');
@@ -509,6 +541,6 @@ test('shows paths for same-named projects and exposes pagination as a native row
   expect(items).toEqual([
     expect.objectContaining({ id: 'project:/personal/app', label: 'app', description: '/personal/app · 1 chat' }),
     expect.objectContaining({ id: 'project:/team/app', label: 'app', description: '/team/app · 1 chat' }),
-    expect.objectContaining({ id: 'more', command: { command: 'codexProjectChats.loadMore', title: 'Load more conversations' } }),
+    expect.objectContaining({ id: 'more', command: { command: 'codexChatsList.loadMore', title: 'Load more conversations' } }),
   ]);
 });

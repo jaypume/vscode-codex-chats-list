@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1
+
+### Fixed
+
+- Use separate VS Code view, command, and setting IDs so Codex Chats List can run alongside Codex Project Chats.
+- Read the previous CLI path when the new setting is unset. Update custom keybindings to use `codexChatsList.*`.
+
 ## 1.2.0
 
 ### Changed
