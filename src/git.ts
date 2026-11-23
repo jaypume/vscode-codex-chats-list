@@ -8,9 +8,11 @@ export interface WorkspaceRepository {
   root: string;
 }
 
-export type Directory =
-  | { kind: 'git'; root: string; common: string }
-  | { kind: 'folder' | 'unknown' };
+export type GitDirectory = { kind: 'git'; root: string; common: string };
+export type Directory = GitDirectory | { kind: 'folder' | 'unknown' };
+export type RepositoryTarget =
+  | GitDirectory
+  | { kind: 'remote'; remote: string; githubKey?: string };
 
 const exec = promisify(execFile);
 const gitOptions = {

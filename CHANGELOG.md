@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.0
+
+### Added
+
+- Move a conversation to a repository in the project tree and restore automatic grouping from its context menu.
+- Choose a known repository or select a local Git folder, including repositories with no conversation history.
+
 ## 1.8.0
 
 ### Changed

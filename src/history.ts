@@ -11,7 +11,11 @@ export class ConversationHistory {
   private active = 0;
   private disposed = false;
 
-  private constructor(private readonly client: CodexClient, private readonly store: HistoryStore) {
+  private constructor(
+    private readonly client: CodexClient,
+    private readonly store: HistoryStore,
+    readonly sourceKey: string,
+  ) {
     for (const chat of store.rows()) {
       if (chat.directory) this.directories.set(pathKey(chat.cwd), chat.directory);
     }
@@ -20,7 +24,7 @@ export class ConversationHistory {
   static async open(client: CodexClient, storage?: string): Promise<ConversationHistory> {
     const source = createHash('sha256').update(await client.historySource()).digest('hex');
     const store = await openHistoryStore(storage, source);
-    try { return new ConversationHistory(client, store); }
+    try { return new ConversationHistory(client, store, source); }
     catch (error) { store.close(); throw error; }
   }
 

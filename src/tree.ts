@@ -18,9 +18,10 @@ type ProjectNode = {
   pinned: boolean;
   hidden: boolean;
 };
+type ChatFlags = { pinned: boolean; hidden: boolean; assignedRepository?: string };
 export type TreeNode =
   | ProjectNode
-  | { kind: 'chat'; chat: Chat; filtered: boolean; pinned: boolean; hidden: boolean }
+  | ({ kind: 'chat'; chat: Chat; filtered: boolean } & ChatFlags)
   | { kind: 'more' };
 
 const t = createLocalizer(vscode.env.language);
@@ -44,7 +45,7 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
 
   constructor(
     private readonly state: vscode.Memento,
-    private readonly chatFlags: (id: string) => { pinned: boolean; hidden: boolean },
+    private readonly chatFlags: (id: string) => ChatFlags,
   ) {
     this.expansion = new Map(
       Object.entries(state.get<Record<string, boolean>>('projectExpansion', {})),
@@ -155,7 +156,8 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
     const { chat } = node;
     const item = new vscode.TreeItem(chat.title);
     item.id = `${prefix}chat:${chat.id}`;
-    item.contextValue = (node.pinned ? 'pinnedChat' : 'chat') + hidden;
+    item.contextValue =
+      (node.pinned ? 'pinnedChat' : 'chat') + hidden + (node.assignedRepository ? '.assigned' : '');
     const time = relativeTime(chat.recencyAt);
     const opening = this.opening === chat.id;
     item.description = opening ? t('opening') : time;
@@ -171,6 +173,9 @@ export class ChatTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dispo
       chat.title,
       `${t('recentConversation')}: ${timestamp}`,
       `${t('path')}: ${chat.cwd}`,
+      ...(node.assignedRepository
+        ? [t('assignedRepository', { repository: node.assignedRepository })]
+        : []),
       ...(node.pinned ? [t('pinnedLabel')] : []),
       ...(node.hidden ? [t('hiddenLabel')] : []),
     ].join('\n');

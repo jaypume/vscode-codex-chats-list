@@ -166,8 +166,9 @@ export class RepositoryCatalog {
     active: () => boolean,
     changed: () => void,
     forcePaths: boolean,
+    additionalRemotes: Iterable<string> = [],
   ): Promise<void> {
-    const remotes = new Set(workspace.keys());
+    const remotes = new Set([...workspace.keys(), ...additionalRemotes]);
     const paths = new Set<string>();
     for (const chat of chats) {
       if (!chat.repository) continue;
@@ -230,6 +231,7 @@ export class RepositoryCatalog {
   presentation(
     chats: readonly Chat[],
     workspace: ReadonlyMap<string, WorkspaceRepository>,
+    additionalRemotes: Iterable<string> = [],
   ): Map<string, RepositoryPresentation> {
     const names = new Map<number, CachedIdentity>();
     const canonical = new Map<string, CachedIdentity>();
@@ -273,19 +275,23 @@ export class RepositoryCatalog {
         break;
       }
     }
+    const remotes = new Set([...workspace.keys(), ...additionalRemotes]);
     for (const chat of chats) {
-      const remote = chat.repository;
-      if (!remote || result.has(remote)) continue;
+      if (chat.repository) remotes.add(chat.repository);
+    }
+    for (const remote of remotes) {
       const key = groupKey(remote);
       const preferenceAliases = aliases.get(key);
       const identity = identityFor(remote);
-      result.set(remote, {
+      const entry = {
         key,
         remote: identity ? (names.get(identity.id)?.identity?.remote ?? identity.remote) : remote,
         current: current.has(key),
         checkout: current.get(key) ?? historical.get(key)?.root,
         preferenceAliases: preferenceAliases ? [...preferenceAliases] : undefined,
-      });
+      };
+      result.set(remote, entry);
+      if (identity && !result.has(key)) result.set(key, entry);
     }
     return result;
   }

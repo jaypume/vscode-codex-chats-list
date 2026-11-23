@@ -13,6 +13,8 @@
   "command.unhide": "Unhide",
   "command.toggleHidden": "Toggle Hidden Items View",
   "command.delete": "Delete Conversations…",
+  "command.moveToRepository": "Move to Repository…",
+  "command.restoreRepository": "Restore Automatic Grouping",
   "command.search": "Search Conversation Titles",
   "command.clearSearch": "Clear Conversation Search",
   "welcome.noWorkspace": "Open a project folder to see its conversations.\n[View All Projects](command:codexChatsList.showAll)",

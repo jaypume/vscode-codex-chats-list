@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
   executeCommand: vi.fn(),
   showWarning: vi.fn<(message: string, options?: vscode.MessageOptions, cancel?: vscode.MessageItem, confirm?: vscode.MessageItem) => Promise<vscode.MessageItem | undefined>>(),
   openConversation: vi.fn(),
-  promptScope: vi.fn<(items: { value: Scope | Grouping | GroupOrder }[]) => Promise<{ value: Scope | Grouping | GroupOrder } | undefined>>(),
+  promptScope: vi.fn<(items: { label?: string; description?: string; value?: Scope | Grouping | GroupOrder }[]) => Promise<{ value?: Scope | Grouping | GroupOrder; label?: string } | undefined>>(),
+  chooseFolder: vi.fn<() => Promise<Pick<vscode.Uri, 'fsPath'>[] | undefined>>(),
   createInputBox: vi.fn<() => TestInputBox>(),
   realpath: vi.fn<(path: string) => Promise<string>>(),
   updateScope: vi.fn<(key: string, value: unknown) => Promise<void>>(),
@@ -55,6 +56,7 @@ vi.mock('vscode', () => ({
     createTreeView: mocks.createTree,
     createInputBox: mocks.createInputBox,
     showQuickPick: mocks.promptScope,
+    showOpenDialog: mocks.chooseFolder,
     showInformationMessage: vi.fn(),
     showWarningMessage: mocks.showWarning,
     withProgress: (_options: unknown, task: (progress: vscode.Progress<unknown>) => Promise<void>) => task({ report() {} }),
@@ -185,6 +187,7 @@ beforeEach(() => {
   mocks.findRepositories.mockReset().mockResolvedValue(new Map());
   mocks.realpath.mockReset().mockImplementation(async value => value);
   mocks.createInputBox.mockImplementation(() => new TestInputBox());
+  mocks.chooseFolder.mockReset().mockResolvedValue(undefined);
   mocks.registerCommand.mockReturnValue({ dispose() {} });
   mocks.updateScope.mockReset().mockResolvedValue(undefined);
   mocks.cliPath = undefined;
@@ -200,7 +203,8 @@ test('all commands use the fork namespace and open focuses the fork view', async
   expect(mocks.registerCommand.mock.calls.map(([id]) => id)).toEqual([
     'codexChatsList.open', 'codexChatsList.refresh', 'codexChatsList.selectScope',
     'codexChatsList.selectGrouping', 'codexChatsList.sortProjects', 'codexChatsList.pin', 'codexChatsList.unpin',
-    'codexChatsList.hide', 'codexChatsList.unhide', 'codexChatsList.toggleHidden', 'codexChatsList.delete',
+    'codexChatsList.hide', 'codexChatsList.unhide', 'codexChatsList.moveToRepository', 'codexChatsList.restoreRepository',
+    'codexChatsList.toggleHidden', 'codexChatsList.delete',
     'codexChatsList.toggleFolders', 'codexChatsList.showAll',
     'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.loadMore', 'codexChatsList.openConversation',
   ]);
@@ -246,6 +250,37 @@ test('each range, grouping, title search and folder filter uses the same indexed
   expect(ids()).toEqual(['thread-fork', 'thread-upstream']);
   await fixture.pick('current');
   expect(ids()).toHaveLength(0);
+
+  await fixture.run('clearSearch');
+  await fixture.group('repository');
+  await fixture.run('toggleFolders');
+  const conversation = (id: string) => fixture.tree.getChildren().flatMap(node => fixture.tree.getChildren(node))
+    .find(node => node.kind === 'chat' && node.chat.id === id);
+  const groupFor = (id: string) => fixture.tree.getChildren().find(node =>
+    node.kind === 'project' && node.group.chats.some(chat => chat.id === id));
+  mocks.promptScope.mockImplementationOnce(async options => options.find(option => option.description === 'github.com/me/app'));
+  await fixture.run('moveToRepository', conversation('thread-folder'));
+  expect(groupFor('thread-folder')).toMatchObject({ group: { key: 'remote:github.com/me/app' } });
+  expect(fixture.tree.getTreeItem(conversation('thread-folder')!).tooltip).toContain('Path: /fixture');
+  expect(fixture.tree.getTreeItem(conversation('thread-folder')!).tooltip).toContain('Manually assigned to github.com/me/app');
+  await fixture.run('delete', groupFor('thread-folder'));
+  expect(mocks.showWarning.mock.calls.at(-1)?.[1]?.detail).toContain('Manually assigned conversations included: 1.');
+  expect(mocks.deleteThread).not.toHaveBeenCalled();
+
+  mocks.inspectDirectory.mockImplementationOnce(async () => ({ kind: 'git', root: '/fresh', common: '/fresh/.git' }));
+  mocks.findRepositories.mockResolvedValueOnce(new Map());
+  mocks.promptScope.mockImplementationOnce(async options => options[0]);
+  mocks.chooseFolder.mockResolvedValueOnce([{ fsPath: '/fresh' }]);
+  await fixture.run('moveToRepository', conversation('thread-folder'));
+  expect(conversation('thread-folder')).toBeUndefined();
+  await fixture.pick('all');
+  expect(groupFor('thread-folder')).toMatchObject({ group: { key: 'git:/fresh/.git' } });
+  await fixture.group('folder');
+  expect(groupFor('thread-folder')).toMatchObject({ group: { cwd: '/fixture' } });
+  await fixture.run('restoreRepository', conversation('thread-folder'));
+  expect(fixture.tree.getTreeItem(conversation('thread-folder')!).contextValue).toBe('chat');
+  await fixture.group('repository');
+  expect(groupFor('thread-folder')).toMatchObject({ group: { key: '/fixture' } });
   expect(mocks.list.mock.calls).toEqual([[undefined, '', null]]);
 });
 

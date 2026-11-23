@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -39,8 +39,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "format": "oxfmt --write src/git.ts src/item-flags.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
-    "format:check": "oxfmt --check src/git.ts src/item-flags.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
+    "format": "oxfmt --write src/assignments.ts src/git.ts src/item-flags.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
+    "format:check": "oxfmt --check src/assignments.ts src/git.ts src/item-flags.ts src/repositories.ts src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
     "lint": "oxlint --max-warnings=0 src",
     "lint:fix": "pnpm run lint --fix",
     "package": "node -e \"require('node:fs').mkdirSync('release-artifact', { recursive: true })\" && vsce package --no-dependencies --out release-artifact",
@@ -155,6 +155,16 @@
         "category": "Codex Chats List"
       },
       {
+        "command": "codexChatsList.moveToRepository",
+        "title": "%command.moveToRepository%",
+        "category": "Codex Chats List"
+      },
+      {
+        "command": "codexChatsList.restoreRepository",
+        "title": "%command.restoreRepository%",
+        "category": "Codex Chats List"
+      },
+      {
         "command": "codexChatsList.search",
         "title": "%command.search%",
         "category": "Codex Chats List",
@@ -213,28 +223,38 @@
       "view/item/context": [
         {
           "command": "codexChatsList.pin",
-          "when": "view == codexChatsList.list && viewItem =~ /^(project|chat)(\\.hidden)?$/",
+          "when": "view == codexChatsList.list && viewItem =~ /^(project|chat)(\\.hidden)?(\\.assigned)?$/",
           "group": "1_item@1"
         },
         {
           "command": "codexChatsList.unpin",
-          "when": "view == codexChatsList.list && viewItem =~ /^(pinnedProject|pinnedChat)(\\.hidden)?$/",
+          "when": "view == codexChatsList.list && viewItem =~ /^(pinnedProject|pinnedChat)(\\.hidden)?(\\.assigned)?$/",
           "group": "1_item@1"
         },
         {
           "command": "codexChatsList.hide",
-          "when": "view == codexChatsList.list && viewItem =~ /^(project|chat|pinnedProject|pinnedChat)$/",
+          "when": "view == codexChatsList.list && viewItem =~ /^(project|chat|pinnedProject|pinnedChat)(\\.assigned)?$/",
           "group": "1_item@2"
         },
         {
           "command": "codexChatsList.unhide",
-          "when": "view == codexChatsList.list && viewItem =~ /\\.hidden$/",
+          "when": "view == codexChatsList.list && viewItem =~ /\\.hidden(\\.assigned)?$/",
           "group": "1_item@2"
         },
         {
           "command": "codexChatsList.delete",
-          "when": "view == codexChatsList.list && viewItem =~ /^(project|chat|pinnedProject|pinnedChat)(\\.hidden)?$/",
+          "when": "view == codexChatsList.list && viewItem =~ /^(project|chat|pinnedProject|pinnedChat)(\\.hidden)?(\\.assigned)?$/",
           "group": "9_delete"
+        },
+        {
+          "command": "codexChatsList.moveToRepository",
+          "when": "view == codexChatsList.list && viewItem =~ /^(chat|pinnedChat)(\\.hidden)?(\\.assigned)?$/",
+          "group": "2_repository@1"
+        },
+        {
+          "command": "codexChatsList.restoreRepository",
+          "when": "view == codexChatsList.list && viewItem =~ /\\.assigned$/",
+          "group": "2_repository@2"
         }
       ],
       "commandPalette": [
@@ -260,6 +280,14 @@
         },
         {
           "command": "codexChatsList.delete",
+          "when": "false"
+        },
+        {
+          "command": "codexChatsList.moveToRepository",
+          "when": "false"
+        },
+        {
+          "command": "codexChatsList.restoreRepository",
           "when": "false"
         },
         {

@@ -2,8 +2,9 @@ import { createLocalizer } from './i18n';
 import * as vscode from 'vscode';
 import { access, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { RepositoryAssignments } from './assignments';
 import { CodexClient } from './client';
-import { findRepositories, inspectDirectory, type WorkspaceRepository } from './git';
+import { findRepositories, inspectDirectory, type RepositoryTarget, type WorkspaceRepository } from './git';
 import { ConversationHistory, HEAD_REFRESH_MS } from './history';
 import { ItemFlags } from './item-flags';
 import { RepositoryCatalog } from './repositories';
@@ -63,6 +64,7 @@ class CodexChatsListView implements vscode.Disposable {
   private readonly repositories: RepositoryCatalog;
   private view?: vscode.TreeView<TreeNode>;
   private history?: ConversationHistory;
+  private assignments?: RepositoryAssignments;
   private connecting?: CodexClient;
   private scope: Scope;
   private grouping: Grouping;
@@ -119,6 +121,7 @@ class CodexChatsListView implements vscode.Disposable {
     this.tree = new ChatTree(context.workspaceState, id => ({
       pinned: this.pins.has('chat', id),
       hidden: this.hidden.has('chat', id),
+      assignedRepository: this.assignmentLabel(id),
     }));
   }
 
@@ -189,7 +192,7 @@ class CodexChatsListView implements vscode.Disposable {
         if (active()) this.render();
       }, INDEX_STEP_MS);
     };
-    void this.repositories.refresh(this.chats, this.workspaceRepositories, active, updated, force)
+    void this.repositories.refresh(this.chats, this.workspaceRepositories, active, updated, force, this.assignmentRemotes())
       .catch(() => {})
       .finally(() => {
         this.checkingRepositories = false;
@@ -253,6 +256,90 @@ class CodexChatsListView implements vscode.Disposable {
     this.resetPage();
   }
 
+  private assignmentLabel(id: string): string | undefined {
+    const target = this.assignments?.targets.get(id);
+    if (target?.kind === 'git') return target.root;
+    if (target?.kind === 'remote') {
+      return this.repositoryProjects?.repositoryView?.get(target.githubKey ?? target.remote)?.remote ?? target.remote;
+    }
+    return undefined;
+  }
+
+  private assignmentRemotes(): string[] {
+    return [...(this.assignments?.targets.values() ?? [])].flatMap(target =>
+      target.kind === 'remote' ? [target.remote] : []);
+  }
+
+  async moveConversation(node?: TreeNode): Promise<void> {
+    const assignments = this.assignments;
+    if (this.disposed || !assignments || node?.kind !== 'chat') return;
+    const view = this.repositories.presentation(this.chats, this.workspaceRepositories, this.assignmentRemotes());
+    const remoteTarget = (remote: string): RepositoryTarget => {
+      const match = view.get(remote);
+      return {
+        kind: 'remote', remote: match?.remote ?? remote,
+        githubKey: match?.key.startsWith('github:') ? match.key : undefined,
+      };
+    };
+    const choices = new Map<string, vscode.QuickPickItem & { target: RepositoryTarget }>();
+    const add = (target: RepositoryTarget) => {
+      const identity = target.kind === 'remote' ? target.githubKey ?? `remote:${target.remote}` : `git:${pathKey(target.common)}`;
+      const location = target.kind === 'remote' ? target.remote : target.root;
+      const label = location.replace(/\\/g, '/').split('/').at(-1) || location;
+      choices.set(identity, { label, description: location, target });
+    };
+    for (const repo of this.workspaceRepositories.values()) add(remoteTarget(repo.key));
+    for (const chat of this.chats) {
+      if (chat.repository) add(remoteTarget(chat.repository));
+      else if (chat.directory?.kind === 'git') add(chat.directory);
+    }
+    for (const target of assignments.targets.values()) add(target);
+    const options: (vscode.QuickPickItem & { target?: RepositoryTarget })[] = [
+      { label: t('chooseRepositoryFolder'), alwaysShow: true },
+      ...[...choices.values()].sort((a, b) => a.label.localeCompare(b.label)
+        || (a.description ?? '').localeCompare(b.description ?? '')),
+    ];
+    const selected = await vscode.window.showQuickPick(options, { title: t('moveRepository'), matchOnDescription: true });
+    if (!selected || this.disposed || this.assignments !== assignments) return;
+    let target = selected.target;
+    if (!target) {
+      const [folder] = await vscode.window.showOpenDialog({
+        title: t('chooseRepositoryFolder'), canSelectFolders: true, canSelectFiles: false,
+        defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri,
+      }) ?? [];
+      if (!folder) return;
+      const directory = await inspectDirectory(folder.fsPath);
+      if (directory.kind !== 'git') {
+        void vscode.window.showWarningMessage(t('chooseGitRepository'));
+        return;
+      }
+      const remotes = await findRepositories([folder.fsPath]);
+      const remote = remotes.values().next().value;
+      target = remote ? remoteTarget(remote.key) : directory;
+    }
+    await this.saveAssignment(assignments, node.chat.id, target);
+  }
+
+  async restoreAssignment(node?: TreeNode): Promise<void> {
+    if (node?.kind === 'chat' && this.assignments?.targets.has(node.chat.id)) {
+      await this.saveAssignment(this.assignments, node.chat.id);
+    }
+  }
+
+  private async saveAssignment(assignments: RepositoryAssignments, id: string, target?: RepositoryTarget): Promise<void> {
+    if (this.disposed || assignments !== this.assignments || !this.chats.some(chat => chat.id === id)) return;
+    try {
+      await assignments.set(id, target);
+      if (this.disposed || assignments !== this.assignments) return;
+      this.repositoryProjects = undefined;
+      this.render();
+      this.refreshRepositories();
+      if (target) void vscode.window.showInformationMessage(t('repositoryMoved', { repository: this.assignmentLabel(id) ?? '' }));
+    } catch {
+      void vscode.window.showErrorMessage(t('saveAssignmentFailed'));
+    }
+  }
+
   async deleteConversations(node: TreeNode | undefined): Promise<void> {
     const history = this.history;
     if (!node || node.kind === 'more' || !history || this.disposed || this.deleting) return;
@@ -268,8 +355,12 @@ class CodexChatsListView implements vscode.Disposable {
     if (!chats.length) return;
     const message = group ? t('deleteProjectPrompt', { name: group.name, count: chats.length })
       : t('deleteChatPrompt', { title: chats[0]!.title });
-    const detail = (group ? [group.repository ?? group.cwd, t('deleteProjectDetail')] : [chats[0]!.cwd])
-      .concat(t('deleteDetail')).join('\n\n');
+    const detailLines = group ? [group.repository ?? group.cwd, t('deleteProjectDetail')] : [chats[0]!.cwd];
+    if (group && this.grouping === 'repository') {
+      const count = chats.filter(chat => this.assignments?.targets.has(chat.id)).length;
+      if (count) detailLines.push(t('deleteAssignedDetail', { count }));
+    }
+    const detail = detailLines.concat(t('deleteDetail')).join('\n\n');
     this.deleting = true;
     try {
       const cancel = { title: t('deleteCancel'), isCloseAffordance: true };
@@ -407,6 +498,7 @@ class CodexChatsListView implements vscode.Disposable {
     this.connecting = undefined;
     this.history?.dispose();
     this.history = undefined;
+    this.assignments = undefined;
     this.syncing = false;
     this.forceRefresh = false;
     this.complete = false;
@@ -436,6 +528,10 @@ class CodexChatsListView implements vscode.Disposable {
     if (changed) this.render();
     try {
       const flags = await Promise.all([this.pins, this.hidden].map(store => store.reload().catch(() => false)));
+      if (await this.assignments?.reload().catch(() => false) && current()) {
+        this.repositoryProjects = undefined;
+        changed = true;
+      }
       if (flags.some(Boolean) && current()) this.render();
       if (!current()) return;
       if (!this.history) {
@@ -447,6 +543,10 @@ class CodexChatsListView implements vscode.Disposable {
           const history = await ConversationHistory.open(client, this.context.globalStorageUri?.fsPath);
           if (!current()) { history.dispose(); return; }
           this.history = history;
+          this.assignments = new RepositoryAssignments(this.context.globalStorageUri?.fsPath, history.sourceKey);
+          await this.assignments.reload().catch(() => false);
+          if (!current()) return;
+          this.repositoryProjects = undefined;
         } catch (error) { client.dispose(); throw error; }
         finally { if (this.connecting === client) this.connecting = undefined; }
         this.readHistory();
@@ -563,7 +663,10 @@ class CodexChatsListView implements vscode.Disposable {
   private viewProjects(chats = this.chats): WorkspaceProjects {
     if (this.grouping !== 'repository') return this.projects;
     if (chats === this.chats && this.repositoryProjects) return this.repositoryProjects;
-    const projects = { ...this.projects, repositoryView: this.repositories.presentation(chats, this.workspaceRepositories) };
+    const projects = {
+      ...this.projects, assignments: this.assignments?.targets,
+      repositoryView: this.repositories.presentation(chats, this.workspaceRepositories, this.assignmentRemotes()),
+    };
     if (chats === this.chats) this.repositoryProjects = projects;
     return projects;
   }
@@ -615,6 +718,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('codexChatsList.unpin', (node?: TreeNode) => provider.setFlag(node, 'pinned', false)),
     vscode.commands.registerCommand('codexChatsList.hide', (node?: TreeNode) => provider.setFlag(node, 'hidden', true)),
     vscode.commands.registerCommand('codexChatsList.unhide', (node?: TreeNode) => provider.setFlag(node, 'hidden', false)),
+    vscode.commands.registerCommand('codexChatsList.moveToRepository', (node?: TreeNode) => provider.moveConversation(node)),
+    vscode.commands.registerCommand('codexChatsList.restoreRepository', (node?: TreeNode) => provider.restoreAssignment(node)),
     vscode.commands.registerCommand('codexChatsList.toggleHidden', () => provider.toggleHidden()),
     vscode.commands.registerCommand('codexChatsList.delete', (node?: TreeNode) => provider.deleteConversations(node)),
     vscode.commands.registerCommand('codexChatsList.toggleFolders', () => provider.toggleFolders()),
