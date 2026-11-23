@@ -14,6 +14,7 @@ const t = createLocalizer(vscode.env.language);
 const VIEW_ID = 'codexProjectChats.list';
 const OFFICIAL_ID = 'openai.chatgpt';
 const AUTO_REFRESH_MS = 5_000;
+type LoadMode = 'replace' | 'append' | 'poll';
 
 async function getBinary(): Promise<string> {
   const configured = vscode.workspace.getConfiguration('codexProjectChats').get<string>('cliPath', '').trim();
@@ -122,16 +123,26 @@ class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposabl
     if (this.disposed || !this.view || !message) return;
     if (message.type !== 'ready' && !this.ready) return;
     switch (message.type) {
-      case 'ready': this.ready = true; await this.refresh(); break;
+      case 'ready':
+        if (this.ready) {
+          // VS Code can recreate the document while keeping its view and results alive.
+          if (!this.searchTimer) this.send();
+          break;
+        }
+        this.ready = true;
+        await this.refresh();
+        break;
       case 'refresh': await this.refresh(); break;
-      case 'more': if (!this.busy && this.cursor) await this.load(true); break;
+      case 'more': if (!this.busy && this.cursor) await this.load('append'); break;
       case 'scope':
         this.scope = message.value;
         // Invalidate the old query immediately; persisting the preference must not delay it.
         await Promise.all([this.refresh(), this.context.workspaceState.update('scope', this.scope)]);
         break;
       case 'search':
+        if (message.value === this.search) break;
         this.search = message.value;
+        this.cursor = null;
         clearTimeout(this.searchTimer);
         this.clearAutoRefresh();
         // Invalidate in-flight requests immediately, before the debounce window ends.
@@ -145,7 +156,7 @@ class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposabl
   async refresh(): Promise<void> {
     clearTimeout(this.searchTimer);
     this.searchTimer = undefined;
-    if (!this.disposed && this.view && this.ready) await this.load(false);
+    if (!this.disposed && this.view && this.ready) await this.load('replace');
   }
 
   private clearAutoRefresh(): void {
@@ -156,7 +167,7 @@ class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposabl
   /** Poll stored metadata only while visible; this client owns a separate app-server. */
   private async autoRefresh(): Promise<void> {
     if (!this.view?.visible || !this.ready || this.disposed || this.loading || this.searchTimer) return;
-    await this.load(false, true);
+    await this.load('poll');
   }
 
   private scheduleAutoRefresh(): void {
@@ -168,8 +179,11 @@ class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposabl
     }, AUTO_REFRESH_MS);
   }
 
-  private async load(append: boolean, background = false): Promise<void> {
+  private async load(mode: LoadMode): Promise<void> {
     if (this.disposed || !this.view || !this.ready) return;
+    const append = mode === 'append';
+    const background = mode === 'poll';
+    const { scope, search } = this;
     this.clearAutoRefresh();
     const generation = ++this.generation;
     this.loading = true;
@@ -177,29 +191,31 @@ class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposabl
     let changed = false;
     if (!background) {
       this.error = '';
-      if (!append) { this.chats = []; this.cursor = null; this.loadedPages = 1; }
+      if (mode === 'replace') { this.chats = []; this.cursor = null; this.loadedPages = 1; }
       this.send();
     }
     try {
-      const roots = await workspaceRoots();
+      // A continuation must use the workspace paths that produced its cursor.
+      const roots = append ? this.roots : await workspaceRoots();
       if (!this.isCurrent(generation)) return;
-      let chats = append ? this.chats : [];
+      const chatsById = new Map<string, Chat>(append ? this.chats.map(chat => [chat.id, chat]) : []);
       let cursor = append ? this.cursor : null;
       let pages = 0;
-      if (this.scope !== 'current' || roots.length) {
+      if (scope !== 'current' || roots.length) {
         const binary = await getBinary();
         if (!this.isCurrent(generation)) return;
         if (!this.client || binary !== this.binary) { this.client?.dispose(); this.client = new CodexClient(binary, this.context.extension.packageJSON.version, vscode.env.language); this.binary = binary; }
         // Rebuild every loaded page so removals and changed ordering cannot leave a stale tail.
         const pageLimit = background ? this.loadedPages : 1;
         do {
-          const page = await this.client.list(this.scope === 'current' ? roots : undefined, this.search, cursor);
+          const page = await this.client.list(scope === 'current' ? roots : undefined, search, cursor);
           if (!this.isCurrent(generation)) return;
-          chats = [...new Map([...chats, ...page.chats].map(chat => [chat.id, chat])).values()];
+          for (const chat of page.chats) chatsById.set(chat.id, chat);
           cursor = page.nextCursor;
           pages++;
         } while (cursor && pages < pageLimit);
       }
+      const chats = [...chatsById.values()];
       changed = this.error !== '' || cursor !== this.cursor || roots.length !== this.roots.length
         || roots.some((root, index) => root !== this.roots[index]) || chats.length !== this.chats.length
         || chats.some((chat, index) => {

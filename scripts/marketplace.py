@@ -13,6 +13,16 @@ PUBLISHER = 'pujie'
 EXTENSION = 'codex-chats-list'
 
 
+class ValidationPending(RuntimeError):
+    pass
+
+
+def has_flag(flags, name, bit):
+    if isinstance(flags, str):
+        return any(flag.strip().lower() == name for flag in flags.split(','))
+    return type(flags) is int and bool(flags & bit)
+
+
 def compare_payload(local, remote):
     with ZipFile(io.BytesIO(local)) as expected, ZipFile(io.BytesIO(remote)) as actual:
         expected_names = [name for name in expected.namelist() if name.startswith('extension/')]
@@ -38,9 +48,17 @@ def public_payload(version):
         for extension in group.get('extensions', []):
             if extension['publisher']['publisherName'] != PUBLISHER or extension['extensionName'] != EXTENSION:
                 continue
+            flags = extension.get('flags')
+            public = (
+                has_flag(flags, 'public', 256)
+                and not has_flag(flags, 'disabled', 1)
+                and not has_flag(flags, 'unpublished', 4096)
+            )
             for item in extension.get('versions', []):
                 if item['version'] != version:
                     continue
+                if not public or not has_flag(item.get('flags'), 'validated', 1):
+                    raise ValidationPending(f'Marketplace version {version} is not yet available as a validated public release.')
                 for asset in item.get('files', []):
                     if asset['assetType'] != 'Microsoft.VisualStudio.Services.VSIXPackage':
                         continue
@@ -52,6 +70,7 @@ def public_payload(version):
                     if len(payload) > 20 * 1024 * 1024:
                         raise ValueError('Unexpectedly large Marketplace asset')
                     return payload
+                raise ValidationPending(f'Marketplace version {version} has no downloadable VSIX yet.')
     return None
 
 
@@ -63,11 +82,16 @@ def reconcile(archive, wait=False):
         raise ValueError('Wrong release package identity')
     attempts = 21 if wait else 1
     for attempt in range(attempts):
-        remote = public_payload(manifest['version'])
-        if remote is not None:
-            compare_payload(local, remote)
-            print('Marketplace version is public and its extension payload matches the inspected artifact.')
-            return True
+        try:
+            remote = public_payload(manifest['version'])
+        except ValidationPending:
+            if not wait:
+                raise
+        else:
+            if remote is not None:
+                compare_payload(local, remote)
+                print('Marketplace version is public, validated, and matches the inspected extension payload.')
+                return True
         if attempt + 1 < attempts:
             print('Marketplace version is not public yet; waiting for validation.', flush=True)
             time.sleep(15)

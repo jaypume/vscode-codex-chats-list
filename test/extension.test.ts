@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   dispose: vi.fn(), construct: vi.fn(),
   register: vi.fn<(id: string, provider: vscode.WebviewViewProvider) => vscode.Disposable>(),
   readFile: vi.fn<(file: string) => Promise<string>>(),
+  realpath: vi.fn<(path: string) => Promise<string>>(),
   updateScope: vi.fn<(key: string, value: unknown) => Promise<void>>(),
 }));
 vi.mock('../src/client', () => ({ CodexClient: class {
@@ -15,7 +16,7 @@ vi.mock('../src/client', () => ({ CodexClient: class {
   dispose = mocks.dispose;
 } }));
 vi.mock('node:fs/promises', () => ({
-  readFile: mocks.readFile, access: async () => {}, realpath: async (value: string) => value,
+  readFile: mocks.readFile, access: async () => {}, realpath: mocks.realpath,
 }));
 vi.mock('vscode', () => ({
   env: { language: 'en' },
@@ -75,6 +76,7 @@ beforeEach(() => {
   mocks.readFile.mockReset().mockImplementation(async file => file.endsWith('manifest.json')
     ? JSON.stringify({ 'src/main.ts': { isEntry: true, file: 'assets/main.js', css: ['assets/style.css'] } })
     : '<html>{{LOCALIZATION}}</html>');
+  mocks.realpath.mockReset().mockImplementation(async value => value);
   mocks.register.mockReturnValue({ dispose() {} });
   mocks.updateScope.mockReset().mockResolvedValue(undefined);
 });
@@ -123,6 +125,41 @@ test('a slower old search cannot replace a newer result', async () => {
   await vi.advanceTimersByTimeAsync(0);
   const state = fixture.postMessage.mock.calls.at(-1)?.[0];
   expect(state).toMatchObject({ search: 'newer', busy: false, count: 1, groups: [{ chats: [{ id: 'thread-newer' }] }] });
+});
+
+test('pagination waits for the first page and cursor of a changed search', async () => {
+  mocks.list
+    .mockResolvedValueOnce({ ...page('thread-old'), nextCursor: 'old-cursor' })
+    .mockResolvedValueOnce({ ...page('thread-new-first'), nextCursor: 'new-cursor' })
+    .mockResolvedValueOnce(page('thread-new-second'));
+  const fixture = await setup();
+  await fixture.ready();
+  fixture.messages.fire({ type: 'search', value: 'new' });
+  fixture.messages.fire({ type: 'more' });
+  await vi.advanceTimersByTimeAsync(219);
+  expect(mocks.list).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(mocks.list).toHaveBeenNthCalledWith(2, ['/fixture'], 'new', null);
+  fixture.messages.fire({ type: 'more' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.list).toHaveBeenNthCalledWith(3, ['/fixture'], 'new', 'new-cursor');
+  expect(fixture.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({
+    groups: [{ chats: [{ id: 'thread-new-first' }, { id: 'thread-new-second' }] }],
+  });
+});
+
+test('a continuation uses the same resolved workspace paths as its first page', async () => {
+  mocks.realpath.mockResolvedValueOnce('/original').mockResolvedValue('/retargeted');
+  mocks.list
+    .mockResolvedValueOnce({ ...page('thread-first'), nextCursor: 'page-two' })
+    .mockResolvedValueOnce(page('thread-second'));
+  const fixture = await setup();
+  await fixture.ready();
+  fixture.messages.fire({ type: 'more' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.list).toHaveBeenNthCalledWith(1, ['/fixture', '/original'], '', null);
+  expect(mocks.list).toHaveBeenNthCalledWith(2, ['/fixture', '/original'], '', 'page-two');
+  expect(mocks.realpath).toHaveBeenCalledOnce();
 });
 
 test('a failed older request cannot dispose the client serving a newer result', async () => {
@@ -190,6 +227,33 @@ test('polling waits for readiness, pauses while hidden, and catches up immediate
   fixture.setVisible(true);
   await vi.advanceTimersByTimeAsync(15_000);
   expect(mocks.list).toHaveBeenCalledTimes(3);
+});
+
+test('a recreated webview gets all loaded pages while visibility refresh runs', async () => {
+  const first = Promise.withResolvers<ChatPage>();
+  mocks.list
+    .mockResolvedValueOnce({ ...page('thread-old-first'), nextCursor: 'old-second' })
+    .mockResolvedValueOnce(page('thread-old-second'))
+    .mockReturnValueOnce(first.promise)
+    .mockResolvedValueOnce(page('thread-new-second'));
+  const fixture = await setup();
+  await fixture.ready();
+  fixture.messages.fire({ type: 'more' });
+  await vi.advanceTimersByTimeAsync(0);
+  fixture.setVisible(false);
+  fixture.setVisible(true);
+  await vi.advanceTimersByTimeAsync(0);
+  await fixture.ready();
+  expect(mocks.list).toHaveBeenCalledTimes(3);
+  expect(fixture.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({
+    busy: false, count: 2, groups: [{ chats: [{ id: 'thread-old-first' }, { id: 'thread-old-second' }] }],
+  });
+  first.resolve({ ...page('thread-new-first'), nextCursor: 'new-second' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.list).toHaveBeenNthCalledWith(4, ['/fixture'], '', 'new-second');
+  expect(fixture.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({
+    count: 2, groups: [{ chats: [{ id: 'thread-new-first' }, { id: 'thread-new-second' }] }],
+  });
 });
 
 test('a slow foreground load and a slow poll never start overlapping polls', async () => {

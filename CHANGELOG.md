@@ -2,6 +2,12 @@
 
 ## 1.1.4
 
+### Fixed
+
+- Keep pagination bound to its search and workspace paths.
+- Restore previously loaded conversations when VS Code recreates the sidebar.
+- Require Marketplace validation of the exact version before confirming a release.
+
 ### Changed
 
 - Align the source repository, package manifest, preview assets, and release tooling with the Codex Chats List listing.

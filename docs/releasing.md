@@ -48,7 +48,7 @@ To generate documentation screenshots with synthetic data, run `pnpm run preview
 
 1. Download the inspected VSIX from the merged commit's CI artifact into `release-artifact/<version>/`, or rebuild from that exact commit and run `python3 scripts/verify-vsix.py <package.vsix>`. Retain the commit SHA and package checksum beside the inspected package. Ordinary `pnpm run package` builds go to `release-artifact/codex-chats-list-<version>.vsix`; `python3 scripts/verify-vsix.py` checks that default output. The directory is created automatically and ignored by Git. A new build can replace the same version's ordinary output, so preserve the exact inspected upload in its version subdirectory. Pass `--out <path>` to override the build output location when needed.
 2. The maintainer uploads the VSIX as an update from the [Codex Chats List management page](https://marketplace.visualstudio.com/manage/publishers/pujie/extensions/codex-chats-list/hub) for `pujie.codex-chats-list`. For agent-assisted releases, the agent prepares and inspects the package and the maintainer performs the browser upload.
-3. Wait for Marketplace validation. An accepted upload is submitted, not yet a public release. Once public, verify every extension payload file against the inspected local package:
+3. Verify the public release against the inspected local package. The verifier checks that Marketplace has validated the exact version before downloading and comparing the payload. Append `--wait` to retry while validation is pending.
 
    ```sh
    pnpm run release:verify release-artifact/<version>/codex-chats-list-<version>.vsix
