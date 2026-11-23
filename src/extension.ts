@@ -722,6 +722,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('codexChatsList.delete', (node?: TreeNode) => provider.deleteConversations(node)),
     vscode.commands.registerCommand('codexChatsList.toggleFolders', () => provider.toggleFolders()),
     vscode.commands.registerCommand('codexChatsList.showAll', () => provider.setScope('all')),
+    vscode.commands.registerCommand('codexChatsList.showCurrent', () => provider.setScope('current')),
     vscode.commands.registerCommand('codexChatsList.search', () => provider.promptSearch()),
     vscode.commands.registerCommand('codexChatsList.clearSearch', () => provider.setSearch('')),
     vscode.commands.registerCommand(LOAD_MORE, () => provider.more()),

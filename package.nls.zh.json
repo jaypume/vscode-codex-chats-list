@@ -4,6 +4,8 @@
   "command.open": "打开项目对话",
   "command.refresh": "刷新对话",
   "command.scope": "切换对话范围",
+  "command.showAll": "显示全部项目",
+  "command.showCurrent": "显示当前项目",
   "command.grouping": "选择对话分组",
   "command.folders": "显示或隐藏普通文件夹",
   "command.sortProjects": "项目排序",

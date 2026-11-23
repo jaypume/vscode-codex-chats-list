@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -105,6 +105,17 @@
       {
         "command": "codexChatsList.selectScope",
         "title": "%command.scope%",
+        "category": "Codex Chats List"
+      },
+      {
+        "command": "codexChatsList.showAll",
+        "title": "%command.showAll%",
+        "category": "Codex Chats List",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "codexChatsList.showCurrent",
+        "title": "%command.showCurrent%",
         "category": "Codex Chats List",
         "icon": "$(filter)"
       },
@@ -180,8 +191,13 @@
     "menus": {
       "view/title": [
         {
-          "command": "codexChatsList.selectScope",
-          "when": "view == codexChatsList.list",
+          "command": "codexChatsList.showAll",
+          "when": "view == codexChatsList.list && !codexChatsList.allProjects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codexChatsList.showCurrent",
+          "when": "view == codexChatsList.list && codexChatsList.allProjects",
           "group": "navigation@1"
         },
         {
@@ -258,6 +274,14 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "codexChatsList.showAll",
+          "when": "false"
+        },
+        {
+          "command": "codexChatsList.showCurrent",
+          "when": "false"
+        },
         {
           "command": "codexChatsList.sortProjects",
           "when": "codexChatsList.allProjects"

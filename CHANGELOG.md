@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.0
+
+### Changed
+
+- Switch between Current project and All projects with one click on the view toolbar.
+
 ## 1.11.1
 
 ### Changed

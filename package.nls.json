@@ -4,6 +4,8 @@
   "command.open": "Open Project Chats",
   "command.refresh": "Refresh Conversations",
   "command.scope": "Change Conversation Scope",
+  "command.showAll": "Show All Projects",
+  "command.showCurrent": "Show Current Project",
   "command.grouping": "Group Conversations",
   "command.folders": "Toggle Non-Git Folders",
   "command.sortProjects": "Sort Projects",

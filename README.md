@@ -15,7 +15,7 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 
 | Action | How it works |
 | --- | --- |
-| Choose the scope | Use **Change Conversation Scope** in the view toolbar to select **Current project** or **All projects**. |
+| Switch the scope | Click the filter button in the view toolbar to switch between **Current project** and **All projects**. |
 | Group and filter | Use **Group Conversations** to select **By Repository** or **By Folder**. The view menu has **Toggle Non-Git Folders**. |
 | Search titles | Select the magnifier and type a title keyword. The tree updates within the selected scope, **Current project** or **All projects**. Enter keeps the filter and Escape restores the previous results. Use **Clear Conversation Search** to reset it. |
 | See details | Conversation date badges show days such as `2d` or weeks such as `4w`. Dates at least five weeks old or from other years appear after the title as `YYYY-MM-DD`. Project count badges display at most `99`. Hover for the full title, timestamp, path, or exact count. |

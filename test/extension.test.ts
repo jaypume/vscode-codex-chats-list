@@ -213,7 +213,7 @@ test('all commands use the fork namespace and open focuses the fork view', async
     'codexChatsList.selectGrouping', 'codexChatsList.sortProjects', 'codexChatsList.pin', 'codexChatsList.unpin',
     'codexChatsList.hide', 'codexChatsList.unhide', 'codexChatsList.moveToRepository', 'codexChatsList.restoreRepository',
     'codexChatsList.toggleHidden', 'codexChatsList.delete',
-    'codexChatsList.toggleFolders', 'codexChatsList.showAll',
+    'codexChatsList.toggleFolders', 'codexChatsList.showAll', 'codexChatsList.showCurrent',
     'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.loadMore', 'codexChatsList.openConversation',
   ]);
   await fixture.run('open');
@@ -579,8 +579,14 @@ test('title search debounces live matches, restores on Escape, and follows Curre
   expect(ids()).toEqual(['thread-moved', 'thread-path']);
   await fixture.search('aPi');
   expect(ids()).toEqual(['thread-moved']);
-  await fixture.pick('all');
+  await fixture.run('showAll');
   expect(ids()).toEqual(['thread-moved', 'thread-other']);
+  expect(mocks.updateScope).toHaveBeenLastCalledWith('historyView', expect.objectContaining({ scope: 'all' }));
+  await fixture.run('showCurrent');
+  expect(ids()).toEqual(['thread-moved']);
+  expect(mocks.updateScope).toHaveBeenLastCalledWith('historyView', expect.objectContaining({ scope: 'current' }));
+  expect(mocks.promptScope).not.toHaveBeenCalled();
+  await fixture.run('showAll');
   const all = await fixture.beginSearch();
   expect(all.input.title).toContain('All projects');
   all.input.type('');
