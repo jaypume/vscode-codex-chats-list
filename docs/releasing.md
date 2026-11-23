@@ -2,7 +2,7 @@
 
 Marketplace packages are uploaded manually. release-it prepares the version and changelog locally; it does not commit, create tags, push, publish an npm package, or create a GitHub Release. Its Git initialization fetches remote refs to determine the changelog baseline, so preparation needs access to the Git remote. No publishing credentials are required.
 
-The first Marketplace package, `1.1.3`, was built separately before the fork migration. The first package built from the migrated repository is `1.1.4`. Tag its build commit after verifying the corresponding Marketplace package.
+The first Marketplace package, `1.1.3`, was built separately before the fork migration. The native sidebar is packaged as `1.2.0`. Tag its build commit after verifying the corresponding Marketplace package.
 
 ## Prepare a version
 
@@ -42,7 +42,7 @@ Before preparing another version, resolve any pending Marketplace upload and ver
 
 4. Commit and submit the prepared changes through a PR. Merge after required CI passes. The three-platform tests and Linux package inspection remain required; release-it does not replace them.
 
-To generate documentation screenshots with synthetic data, run `pnpm run preview /tmp/codex-chats-list-preview.html`. Append `en` for English; the default is Simplified Chinese. Never capture real history or personal paths for public documentation.
+Capture documentation screenshots from an isolated VS Code profile with synthetic conversations. Keep the English and Simplified Chinese screenshots aligned with the published interface.
 
 ## Upload and verify
 

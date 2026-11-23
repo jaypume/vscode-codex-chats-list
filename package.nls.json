@@ -3,5 +3,9 @@
   "view.title": "Project Chats",
   "command.open": "Open Project Chats",
   "command.refresh": "Refresh Conversations",
+  "command.scope": "Change Conversation Scope",
+  "command.search": "Search Conversation Titles",
+  "command.clearSearch": "Clear Conversation Search",
+  "welcome.noWorkspace": "Open a project folder to see its conversations.\n[View All Projects](command:codexProjectChats.showAll)",
   "configuration.cliPath": "Optional absolute path to the Codex executable on the current host. Leave empty to use the official extension's bundled version."
 }

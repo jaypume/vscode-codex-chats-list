@@ -45,7 +45,7 @@ exports.run = async () => {
     noEditorCreated = true;
     routingVerified = true;
   }
-  await fs.writeFile(path.join(process.env.CODEX_CHATS_LIST_TEST_WORK, 'host-result.json'), JSON.stringify({ webviewReady: true, protocolConnected: true, currentProjectCount: state.count, routingVerified, noEditorCreated }));
+  await fs.writeFile(path.join(process.env.CODEX_CHATS_LIST_TEST_WORK, 'host-result.json'), JSON.stringify({ treeReady: true, currentProjectCount: state.count, routingVerified, noEditorCreated }));
   // Keep this isolated host available for one visual pass. The harness creates the release file afterwards.
   if (process.env.CODEX_CHATS_LIST_KEEP_HOST) await until(async () => {
     try { await fs.access(path.join(process.env.CODEX_CHATS_LIST_TEST_WORK, 'release-host')); return true; } catch { return false; }

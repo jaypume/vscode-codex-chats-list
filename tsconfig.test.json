@@ -2,9 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "ESNext",
-    "jsx": "react-jsx",
     "moduleResolution": "Bundler",
-    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "lib": ["ES2024"],
     "rootDir": ".",
     "noEmit": true,
     "allowImportingTsExtensions": true,
@@ -14,10 +13,7 @@
   "include": [
     "src/**/*.ts",
     "test/**/*.ts",
-    "webview/src/**/*.ts",
-    "webview/src/**/*.tsx",
     "vitest.config.mts",
-    "vite.config.mts",
     "oxlint.config.mts",
     "scripts/check-release.mjs"
   ]

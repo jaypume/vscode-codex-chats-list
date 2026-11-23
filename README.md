@@ -2,83 +2,58 @@
 
 English · [简体中文](README.zh-CN.md)
 
-Browse Codex conversations by project, then continue in the official Codex sidebar.
+Browse Codex conversations by project, then continue in the official Codex sidebar. Version 1.2.0 uses a native VS Code tree with project groups, title search, and pagination.
 
-A small VS Code extension for developers who work across several repositories. It groups existing conversations by their working directory (`cwd`), without patching the official extension or implementing another chat client.
+## Install and browse
 
-> The upstream extension was tested end to end on macOS Apple Silicon. The interface follows the VS Code display language, with Simplified Chinese for Chinese locales and English for other locales. The extension is maintained independently of OpenAI.
-
-## Install and use
-
-1. Install and sign in to the official [Codex extension](https://marketplace.visualstudio.com/items?itemName=openai.chatgpt).
-2. Find **Codex Chats List** by publisher **pujie**, or search `@id:pujie.codex-chats-list` in VS Code. For an offline package, use **Extensions → … → Install from VSIX**.
+1. Install and sign in to the [official Codex extension](https://marketplace.visualstudio.com/items?itemName=openai.chatgpt).
+2. Search `@id:pujie.codex-chats-list` in VS Code to install **Codex Chats List**, or choose **Extensions → … → Install from VSIX** for a local package.
 3. Open a project folder and select **Codex Chats List** in the Activity Bar. You can also run **Codex Chats List: Open Project Chats** from the Command Palette.
-4. Choose **Current project** or **All projects**. Search by title and expand a project to select a conversation.
-5. Continue in your existing official Codex view. If Codex is on the right, the conversation opens there without creating an editor tab.
+4. Expand a project and select a conversation. It opens in the existing official Codex sidebar, wherever you placed it.
 
 [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=pujie.codex-chats-list) · [Report a problem](https://github.com/jaypume/vscode-codex-chats-list/issues)
 
-Change the VS Code display language with **Configure Display Language**, then restart VS Code to apply it to the extension. Conversation titles and project paths remain in their original language.
-
-## Browse conversations
-
 | Action | How it works |
 | --- | --- |
-| Find a conversation | Select **Current project** for workspace roots, or **All projects** for other directories. Enter part of its title to search. |
-| Check recency | Each compact row shows its title and **conversation recency**. Display and sorting both use Codex’s `recencyAt` field, rather than the record update time or the last reply time. Conversations in a project are sorted newest first. Labels such as `Yesterday` or `Oct 17` help narrow the list; they are not creation times. Labels update while the view is visible. |
-| Read full details | Hover over a row to see its complete title, conversation recency to the minute, and project path. The tooltip sits toward the right, leaving a clear mouse lane on the left for moving between rows. |
-| Use the keyboard | Press Tab to focus a conversation and reveal its details, Enter or Space to open it, and Esc to dismiss the tooltip. |
-| Refresh or load more | The visible list updates automatically and checks again five seconds after each query finishes. Updates pause while hidden and resume immediately when the view returns. Use the refresh icon to check immediately. Select **Load more conversations** for the next page; project counts describe loaded matches. |
+| Choose the scope | Use **Change Conversation Scope** in the view toolbar to switch between **Current project** and **All projects**. |
+| Filter by title | Use **Search Conversation Titles**, enter a keyword, and press Enter. Results stay grouped in the tree. Use **Clear Conversation Search** or submit an empty search to reset the filter. |
+| See details | Each row shows the latest conversation time. Hover over a conversation for its full title, time, and project path. |
+| Load and refresh | Select **Load more conversations** at the end of the tree. Use **Refresh Conversations** to reload the first page. |
 
-Long titles are shortened in the list. Full details wrap in the tooltip, with scrolling for unusually long content. Missing recency metadata is labeled **Unknown**.
+The current scope matches exact working directories, including resolved workspace symlinks. Subdirectories and Git worktrees appear as separate groups. Select **All projects** to see them, or to browse when no folder is open. Projects with the same name display their paths.
+
+Codex filters by title and directory before pagination. Each page contains up to 50 conversations. Counts describe loaded results. Recently active conversations appear first within each project. The tree shows non-archived, interactive local conversations.
+
+The visible tree refreshes five seconds after each completed query. It keeps loaded pages on screen during background refreshes and pauses polling while hidden. The scope and project expansion are saved per workspace. Matching groups open during a title search, and clearing it restores the regular tree's expansion.
 
 ## Preview
 
-The images show the English interface with sample data, not real conversation history. The [Chinese guide](README.zh-CN.md#界面预览) shows the Simplified Chinese interface.
+The native VS Code sidebar below uses synthetic data. [Chinese previews](README.zh-CN.md#界面预览) show the same controls in Simplified Chinese.
 
 | Current project | All projects |
 | --- | --- |
-| ![Compact current-project conversation list with conversation recency](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/current-project-en.png) | ![Projects grouped by cwd, including identical folder names](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/all-projects-en.png) |
+| ![Current project conversation tree](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/current-project-en.png) | ![Native tree with projects grouped by path](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/all-projects-en.png) |
 
-Hover details show the full title, conversation recency, and path while leaving the left side available for switching rows:
+![Native tooltip showing title, recent conversation time and path](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/hover-details-en.png)
 
-![Compact right-aligned hover details with a clear pointer lane on the left](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/hover-details-en.png)
+## Compatibility and privacy
 
-## What it does
-
-- Groups conversations by exact working directory, with the current project first.
-- Supports multi-root workspaces and real paths for symlinked workspace roots. Subdirectories and Git worktrees remain separate groups.
-- Searches titles on the server before pagination. Each page contains up to 50 conversations; **Load more conversations** loads the next page. Counts describe the loaded results.
-- Automatically refreshes the pages already loaded, keeping the current list visible during updates. Unchanged results leave the interface and hover details untouched.
-- Shows non-archived, interactive local conversations; excludes subagents and batch sessions.
-- Distinguishes projects with identical folder names by their paths.
-- Temporarily expands search matches and restores the previous collapse state when the search is cleared.
-
-With no folder open, select **All projects** to browse all projects. Scope selection is remembered per workspace. There are no custom tags, manual categories, archive/delete actions, or transcript viewer.
-
-## Compatibility and troubleshooting
+The manifest requires VS Code 1.100 or newer. The extension follows the VS Code display language, with Simplified Chinese for Chinese locales and English otherwise. Conversation titles and paths retain their original text.
 
 | Situation | Guidance |
 | --- | --- |
-| Empty current-project list | The saved `cwd` must match a workspace root. A conversation started in a subdirectory belongs to that subdirectory. Try **All projects**. |
-| Official Codex binary cannot be found | Update/enable the official extension, or set `codexProjectChats.cliPath` to an absolute executable path on the current host. |
-| Clicking a conversation fails | Open the official Codex view and retry. Report the VS Code and official extension versions; the upstream URI handler can change. |
-| WSL, SSH, or a container | Install both extensions in that remote workspace. Cross-host histories are not combined. Remote behavior is not yet verified end to end. |
-| Windows forwarding Codex to WSL from a local window | Open the project in a WSL window instead. This mixed-host mode is unsupported. |
+| Empty current-project tree | The saved working directory must match a workspace root. Select **All projects** for sessions started in a subdirectory or worktree. |
+| Codex binary unavailable | Enable the official extension or set `codexProjectChats.cliPath` to an absolute executable path on the current host. |
+| Opening a conversation fails | Open the official Codex sidebar and retry. Include both extension versions when reporting the issue, since the navigation URI comes from the official extension. |
+| WSL, SSH, or a container | Install both extensions in the remote workspace. History stays on each host. For Windows with Codex running in WSL, open the project in a WSL window. |
 
-The manifest requires VS Code 1.100 or newer. Upstream tested VS Code 1.143.1 with `openai.chatgpt` 26.1021.22027 on macOS Apple Silicon.
+The extension reads conversation IDs, titles, working directories, and recent conversation times from the local bundled `codex app-server`. It uses `thread/list` with `useStateDbOnly`. When a title is missing, the server's first-message preview can supply the label. The official executable manages its internal state and logs. Navigation uses the official extension's existing `/local/<id>` URI handler.
 
-## Privacy and integration boundary
+Disable the upstream extension or its old prototype before enabling Codex Chats List to avoid duplicate views. Codex stores conversations independently.
 
-The extension starts the official bundled `codex app-server` over local stdio and requests `thread/list` with `useStateDbOnly`. It passes only IDs, titles (or a first-message preview when no title exists), working directories, and conversation recency timestamps to its local webview. It does not read full transcripts or account credentials, send prompts, or directly write the Codex database. The app-server may maintain its own internal state and logs. This extension adds no telemetry or external webview resources; the official executable remains subject to its own behavior and configuration.
+## Development and support
 
-Navigation uses `vscode.env.asExternalUri` and the official extension's `/local/<id>` URI handler to target the current window and reveal the existing sidebar. That upstream URI route is not a stable public API. Project grouping is a navigation feature, not an access-control boundary.
-
-Disable the upstream extension or its local prototype before enabling Codex Chats List to avoid duplicate views. Codex stores conversations independently of both extensions.
-
-## Development
-
-Use Node.js 24.18.0 (see `.nvmrc`) and pnpm 12.15.0 (pinned in `packageManager`):
+Use Node.js 24.18.0 and pnpm 12.15.0 as declared in `.nvmrc` and `packageManager`.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -89,18 +64,6 @@ pnpm test
 pnpm run package
 ```
 
-Vitest runs TypeScript tests directly against the source; `pnpm run check` checks extension, test, and Webview types. Use `pnpm run test:watch` while developing. The extension host compiles to CommonJS in `dist/extension/`; the React and TypeScript interface in `webview/src/` is built with Vite into `dist/webview/`. `media/` contains icons. Frontend components, hooks, feature styles, and colocated tests are organized by responsibility; see [the Webview guide](https://github.com/jaypume/vscode-codex-chats-list/blob/main/webview/README.md). Oxlint and Oxfmt checks run in CI.
+The host compiles to `dist/extension/`. The VSIX contains compiled host code, icons, language resources, and public documentation. The package is generated as `release-artifact/codex-chats-list-<version>.vsix`. See [contributing](https://github.com/jaypume/vscode-codex-chats-list/blob/main/CONTRIBUTING.md) and the [release procedure](https://github.com/jaypume/vscode-codex-chats-list/blob/main/docs/releasing.md).
 
-Run `pnpm dev` for the local interface preview with React Fast Refresh at `http://127.0.0.1:5173/`. It uses synthetic data; append `?lang=en` for English. The installed extension loads the packaged Vite assets through the VS Code Webview API.
-
-The VSIX is generated as `release-artifact/codex-chats-list-<version>.vsix`. The directory is created automatically and ignored by Git. React and React DOM are bundled into the browser entry; only built code, local media, and public documentation are packaged, with no `node_modules/` directory. This is a VS Code extension, not an npm library (`private: true` prevents accidental npm publication).
-
-CI runs the tests on Linux, macOS, and Windows and inspects a VSIX on Linux. One POSIX executable fixture is explicitly skipped on Windows. These checks do not replace a real VS Code/official Codex integration test. Live-history and extension-host tests are opt-in; see [CONTRIBUTING.md](https://github.com/jaypume/vscode-codex-chats-list/blob/main/CONTRIBUTING.md).
-
-Repository documentation and metadata may be ahead of the last Marketplace package; editing this repository does not update an already uploaded VSIX. release-it prepares the version and changelog locally; Marketplace packages are uploaded manually after CI passes, then verified before tagging. See the [release procedure](https://github.com/jaypume/vscode-codex-chats-list/blob/main/docs/releasing.md). No GitHub Release or npm package is created.
-
-## Support and license
-
-Use [Issues](https://github.com/jaypume/vscode-codex-chats-list/issues) for bugs and scoped feature requests. Follow [SECURITY.md](https://github.com/jaypume/vscode-codex-chats-list/blob/main/SECURITY.md) for private vulnerability reports. See [SUPPORT.md](https://github.com/jaypume/vscode-codex-chats-list/blob/main/SUPPORT.md) for safe diagnostics.
-
-[MIT](https://github.com/jaypume/vscode-codex-chats-list/blob/main/LICENSE). This extension is a fork of [Codex Project Chats](https://github.com/cixiangtao/codex-project-chats).
+Report bugs in [Issues](https://github.com/jaypume/vscode-codex-chats-list/issues), and use the [security policy](https://github.com/jaypume/vscode-codex-chats-list/blob/main/SECURITY.md) for private vulnerability reports. The extension is independently maintained under the MIT license as a fork of [Codex Project Chats](https://github.com/cixiangtao/codex-project-chats).

@@ -2,7 +2,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { localization, createLocalizer, serializeLocalization, type MessageKey } from '../src/i18n';
+import { localization, createLocalizer, type MessageKey } from '../src/i18n';
 import { parsePage } from '../src/model';
 
 test('Chinese display languages select Chinese, with English as the default fallback', () => {
@@ -24,10 +24,6 @@ test('both languages provide complete messages with matching interpolation param
   for (const key of Object.keys(en) as MessageKey[]) {
     assert(en[key].trim() && zh[key].trim(), key);
     assert.deepEqual(parameters(en[key]), parameters(zh[key]), key);
-  }
-  for (const language of ['en', 'zh-CN']) {
-    assert.deepEqual(JSON.parse(serializeLocalization(language)), localization(language));
-    assert(!serializeLocalization(language).includes('<'));
   }
 });
 

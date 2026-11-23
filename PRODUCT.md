@@ -1,6 +1,6 @@
 # Product scope
 
-Codex Chats List is a VS Code sidebar webview for developers working across several repositories. Its purpose is to find existing Codex conversations by working directory and return to the official Codex view with one click.
+Codex Chats List is a native VS Code sidebar tree for developers working across several repositories. Its purpose is to find existing Codex conversations by working directory and return to the official Codex view with one click.
 
 The scope is project grouping, current/all-project selection, title search, pagination, and navigation. It does not implement chat, full transcript viewing, custom tags, manual categories, archiving, or deletion. It does not patch the official extension.
 

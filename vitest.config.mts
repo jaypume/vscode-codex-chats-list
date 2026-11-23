@@ -8,7 +8,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['test/**/*.test.ts', 'webview/src/**/*.test.{ts,tsx}'],
+    include: ['test/**/*.test.ts'],
     clearMocks: true,
   },
 });

@@ -1,4 +1,4 @@
-import type { Localize } from '../../../../src/i18n';
+import type { Localize } from './i18n';
 
 /** Format conversation recency against one clock value, using calendar dates across DST changes. */
 export function createTimeFormatter(locale: string, t: Localize) {

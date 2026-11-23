@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+
+### Changed
+
+- Browse project conversations with a native VS Code tree, scope picker, title filter, and tooltips.
+- Use native commands and progress for pagination, refresh, and opening a conversation in Codex.
+- Build and ship the extension host without browser assets.
+
 ## 1.1.4
 
 ### Fixed

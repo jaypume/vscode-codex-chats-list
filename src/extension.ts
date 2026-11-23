@@ -1,19 +1,17 @@
-import { createLocalizer, serializeLocalization } from './i18n';
+import { createLocalizer } from './i18n';
 import * as vscode from 'vscode';
-import { access, realpath, readFile } from 'node:fs/promises';
+import { access, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { randomBytes } from 'node:crypto';
 import { CodexClient } from './client';
 import { openInCodex } from './routing';
 import { groupChats, uniquePaths, type Chat, type Scope } from './model';
-import { parseWebviewMessage, type ViewState } from './protocol';
-import { loadWebviewAssets } from './webview-assets';
+import { ChatTree, LOAD_MORE, OPEN_CONVERSATION, VIEW_ID, type TreeNode } from './tree';
 
 const t = createLocalizer(vscode.env.language);
-// Keep the published view ID so VS Code restores the existing sidebar placement.
-const VIEW_ID = 'codexProjectChats.list';
 const OFFICIAL_ID = 'openai.chatgpt';
 const AUTO_REFRESH_MS = 5_000;
+const MINUTE_MS = 60_000;
+const SEARCH_LIMIT = 200;
 type LoadMode = 'replace' | 'append' | 'poll';
 
 async function getBinary(): Promise<string> {
@@ -44,9 +42,9 @@ async function workspaceRoots(): Promise<string[]> {
   return uniquePaths([...roots, ...resolved]);
 }
 
-class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposable {
-  private view?: vscode.WebviewView;
-  private viewSubscriptions: vscode.Disposable[] = [];
+class CodexChatsListView implements vscode.Disposable {
+  readonly tree: ChatTree;
+  private view?: vscode.TreeView<TreeNode>;
   private client?: CodexClient;
   private binary?: string;
   private scope: Scope;
@@ -62,101 +60,94 @@ class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposabl
   private error = '';
   private ready = false;
   private disposed = false;
-  private searchTimer?: ReturnType<typeof setTimeout>;
   private autoRefreshTimer?: ReturnType<typeof setTimeout>;
+  private clockTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.scope = context.workspaceState.get<Scope>('scope', 'current');
+    this.tree = new ChatTree(context.workspaceState);
   }
 
-  async resolveWebviewView(view: vscode.WebviewView): Promise<void> {
-    if (this.disposed) return;
-    this.releaseView();
+  attach(view: vscode.TreeView<TreeNode>): void {
     this.view = view;
-    view.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview')] };
-    this.viewSubscriptions = [
-      view.webview.onDidReceiveMessage((message: unknown) => {
-        if (this.view === view) void this.handle(message);
-      }),
-      view.onDidChangeVisibility(() => {
-        if (this.view !== view) return;
-        this.clearAutoRefresh();
-        if (view.visible) void this.autoRefresh();
-      }),
-      view.onDidDispose(() => this.releaseView(view)),
-    ];
-    const template = await readFile(path.join(this.context.extensionPath, 'dist', 'webview', 'view.html'), 'utf8');
-    if (this.view !== view || this.disposed) return;
-    const assets = await loadWebviewAssets(path.join(this.context.extensionPath, 'dist', 'webview'));
-    if (this.view !== view || this.disposed) return;
-    const nonce = randomBytes(18).toString('base64url');
-    const asset = (name: string) => view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview', name)).toString();
-    view.webview.html = template.replaceAll('{{CSP}}', view.webview.cspSource).replaceAll('{{NONCE}}', nonce)
-      .replaceAll('{{LOCALIZATION}}', serializeLocalization(vscode.env.language))
-      .replaceAll('{{STYLES}}', () => assets.styles.map(file => `<link rel="stylesheet" href="${asset(file)}">`).join(''))
-      .replaceAll('{{SCRIPT}}', () => asset(assets.script));
+    this.context.subscriptions.push(
+      view.onDidChangeVisibility(() => this.visibilityChanged()),
+      view.onDidExpandElement(({ element }) => this.tree.rememberExpansion(element, true)),
+      view.onDidCollapseElement(({ element }) => this.tree.rememberExpansion(element, false)),
+    );
+    this.visibilityChanged();
   }
 
-  /** A view owns its subscriptions, refresh timers, and list-service connection. */
-  private releaseView(view = this.view): void {
-    if (view !== this.view) return;
-    this.view = undefined;
-    this.ready = false;
-    this.generation++;
-    clearTimeout(this.searchTimer);
-    this.searchTimer = undefined;
+  private visibilityChanged(): void {
     this.clearAutoRefresh();
-    this.loading = false;
-    this.busy = false;
-    this.client?.dispose();
-    this.client = undefined;
-    this.binary = undefined;
-    for (const subscription of this.viewSubscriptions.splice(0)) subscription.dispose();
+    clearTimeout(this.clockTimer);
+    this.clockTimer = undefined;
+    if (!this.view?.visible || this.disposed) return;
+    this.tree.refreshTimes();
+    this.scheduleClock();
+    if (this.ready) void this.autoRefresh();
+    else void this.refresh();
+  }
+
+  private scheduleClock(): void {
+    this.clockTimer = setTimeout(() => {
+      if (!this.view?.visible || this.disposed) return;
+      this.tree.refreshTimes();
+      this.scheduleClock();
+    }, MINUTE_MS - Date.now() % MINUTE_MS);
   }
 
   private isCurrent(generation: number): boolean {
     return generation === this.generation && !this.disposed && this.ready && this.view !== undefined;
   }
 
-  private async handle(value: unknown): Promise<void> {
-    const message = parseWebviewMessage(value);
-    if (this.disposed || !this.view || !message) return;
-    if (message.type !== 'ready' && !this.ready) return;
-    switch (message.type) {
-      case 'ready':
-        if (this.ready) {
-          // VS Code can recreate the document while keeping its view and results alive.
-          if (!this.searchTimer) this.send();
-          break;
-        }
-        this.ready = true;
-        await this.refresh();
-        break;
-      case 'refresh': await this.refresh(); break;
-      case 'more': if (!this.busy && this.cursor) await this.load('append'); break;
-      case 'scope':
-        this.scope = message.value;
-        // Invalidate the old query immediately; persisting the preference must not delay it.
-        await Promise.all([this.refresh(), this.context.workspaceState.update('scope', this.scope)]);
-        break;
-      case 'search':
-        if (message.value === this.search) break;
-        this.search = message.value;
-        this.cursor = null;
-        clearTimeout(this.searchTimer);
-        this.clearAutoRefresh();
-        // Invalidate in-flight requests immediately, before the debounce window ends.
-        this.generation++;
-        this.searchTimer = setTimeout(() => { void this.refresh(); }, 220);
-        break;
-      case 'open': await this.open(message.id); break;
-    }
+  async pickScope(): Promise<void> {
+    const options = (['current', 'all'] as const).map(value => ({
+      value, label: t(value), description: value === this.scope ? t('selectedScope') : undefined,
+    }));
+    const option = await vscode.window.showQuickPick(options, { title: t('scope') });
+    if (option) await this.setScope(option.value);
+  }
+
+  async setScope(scope: Scope): Promise<void> {
+    if (scope === this.scope || this.disposed) return;
+    this.scope = scope;
+    await Promise.all([this.refresh(), this.context.workspaceState.update('scope', this.scope)]);
+  }
+
+  async promptSearch(): Promise<void> {
+    const value = await vscode.window.showInputBox({
+      title: t('search'), value: this.search, placeHolder: t('searchPlaceholder'),
+      validateInput: input => input.length > SEARCH_LIMIT ? t('searchTooLong', { count: SEARCH_LIMIT }) : undefined,
+    });
+    if (value !== undefined) await this.setSearch(value);
+  }
+
+  async setSearch(value: string): Promise<void> {
+    const search = value.slice(0, SEARCH_LIMIT).trim();
+    if (search === this.search || this.disposed) return;
+    this.search = search;
+    void vscode.commands.executeCommand('setContext', 'codexProjectChats.hasSearch', Boolean(search));
+    await this.refresh();
   }
 
   async refresh(): Promise<void> {
-    clearTimeout(this.searchTimer);
-    this.searchTimer = undefined;
-    if (!this.disposed && this.view && this.ready) await this.load('replace');
+    if (this.disposed || !this.view) return;
+    this.ready = true;
+    await this.loadWithProgress('replace');
+  }
+
+  async refreshIfLoaded(): Promise<void> {
+    if (this.ready) await this.refresh();
+  }
+
+  async more(): Promise<void> {
+    if (!this.busy && this.cursor) await this.loadWithProgress('append');
+  }
+
+  private async loadWithProgress(mode: 'replace' | 'append'): Promise<void> {
+    const load = this.load(mode);
+    await vscode.window.withProgress({ location: { viewId: VIEW_ID } }, () => load);
   }
 
   private clearAutoRefresh(): void {
@@ -166,13 +157,13 @@ class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposabl
 
   /** Poll stored metadata only while visible; this client owns a separate app-server. */
   private async autoRefresh(): Promise<void> {
-    if (!this.view?.visible || !this.ready || this.disposed || this.loading || this.searchTimer) return;
+    if (!this.view?.visible || !this.ready || this.disposed || this.loading) return;
     await this.load('poll');
   }
 
   private scheduleAutoRefresh(): void {
     this.clearAutoRefresh();
-    if (!this.view?.visible || !this.ready || this.disposed || this.searchTimer) return;
+    if (!this.view?.visible || !this.ready || this.disposed) return;
     this.autoRefreshTimer = setTimeout(() => {
       this.autoRefreshTimer = undefined;
       void this.autoRefresh();
@@ -192,7 +183,7 @@ class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposabl
     if (!background) {
       this.error = '';
       if (mode === 'replace') { this.chats = []; this.cursor = null; this.loadedPages = 1; }
-      this.send();
+      this.render();
     }
     try {
       // A continuation must use the workspace paths that produced its cursor.
@@ -238,51 +229,81 @@ class CodexChatsListView implements vscode.WebviewViewProvider, vscode.Disposabl
     } finally {
       if (this.isCurrent(generation)) {
         this.loading = false; this.busy = false;
-        if (!background || changed) this.send();
+        if (!background || changed) this.render();
         this.scheduleAutoRefresh();
       }
     }
   }
 
-  private async open(id: string): Promise<void> {
+  async open(id: string): Promise<void> {
     if (this.opening || !this.chats.some(chat => chat.id === id)) return;
-    this.opening = id; this.send();
+    this.opening = id;
+    this.render();
     try {
       await openInCodex(id);
     } catch {
       void vscode.window.showErrorMessage(t('errorOpenFailed'), t('copyId')).then(action => {
         if (action) void vscode.env.clipboard.writeText(id);
       });
-    } finally { this.opening = null; this.send(); }
+    } finally {
+      this.opening = null;
+      this.render();
+    }
   }
 
-  private send(): void {
+  private render(): void {
     if (!this.view || !this.ready || this.disposed) return;
-    const state: ViewState = { type: 'state', scope: this.scope, search: this.search,
-      groups: groupChats(this.chats, this.roots), busy: this.busy, opening: this.opening, error: this.error,
-      hasMore: Boolean(this.cursor), count: this.chats.length, hasWorkspace: this.roots.length > 0 };
-    void this.view.webview.postMessage(state);
+    const scope = t(this.scope);
+    const summary = this.search ? `${scope} · ${t('activeSearch', { query: this.search })}` : scope;
+    const count = this.chats.length;
+    this.view.badge = count ? { value: count, tooltip: t(count === 1 ? 'loadedOne' : 'loadedOther', { count }) } : undefined;
+    this.view.message = this.error || (count ? summary : this.emptyMessage(summary));
+    this.tree.update(groupChats(this.chats, this.roots), this.scope, Boolean(this.search),
+      Boolean(this.cursor && !this.busy && !this.error), this.opening);
+  }
+
+  private emptyMessage(summary: string): string | undefined {
+    if (this.busy) return t('reading');
+    if (this.scope === 'current' && !this.roots.length) return undefined;
+    if (this.search) return [summary, t('emptySearchTitle'), t('emptySearchDetail')].join('\n');
+    return t(this.scope === 'current' ? 'emptyCurrentDetail' : 'emptyAllDetail');
   }
 
   /** Metadata-free diagnostics used by the isolated extension-host smoke test. */
   snapshot() { return { ready: this.ready, busy: this.busy, count: this.chats.length, error: this.error, scope: this.scope }; }
 
   dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
-    this.releaseView();
+    this.ready = false;
+    this.loading = false;
+    this.busy = false;
+    this.view = undefined;
+    this.clearAutoRefresh();
+    clearTimeout(this.clockTimer);
+    this.client?.dispose();
+    this.tree.dispose();
   }
 }
 
-/** Register a small, local navigation surface without modifying the official extension. */
+/** Keep the published view ID to preserve access through the existing sidebar entry. */
 export function activate(context: vscode.ExtensionContext) {
   const provider = new CodexChatsListView(context);
+  const view = vscode.window.createTreeView(VIEW_ID, { treeDataProvider: provider.tree, showCollapseAll: true });
   context.subscriptions.push(provider,
-    vscode.window.registerWebviewViewProvider(VIEW_ID, provider),
+    view,
     vscode.commands.registerCommand('codexProjectChats.open', () => vscode.commands.executeCommand(`${VIEW_ID}.focus`)),
     vscode.commands.registerCommand('codexProjectChats.refresh', () => provider.refresh()),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => { void provider.refresh(); }),
+    vscode.commands.registerCommand('codexProjectChats.selectScope', () => provider.pickScope()),
+    vscode.commands.registerCommand('codexProjectChats.showAll', () => provider.setScope('all')),
+    vscode.commands.registerCommand('codexProjectChats.search', () => provider.promptSearch()),
+    vscode.commands.registerCommand('codexProjectChats.clearSearch', () => provider.setSearch('')),
+    vscode.commands.registerCommand(LOAD_MORE, () => provider.more()),
+    vscode.commands.registerCommand(OPEN_CONVERSATION, (id: string) => provider.open(id)),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => { void provider.refreshIfLoaded(); }),
     vscode.workspace.onDidChangeConfiguration(event => {
-      if (event.affectsConfiguration('codexProjectChats.cliPath')) void provider.refresh();
+      if (event.affectsConfiguration('codexProjectChats.cliPath')) void provider.refreshIfLoaded();
     }));
+  provider.attach(view);
   return { snapshot: () => provider.snapshot() };
 }

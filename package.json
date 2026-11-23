@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -27,7 +27,7 @@
   "publisher": "pujie",
   "files": [
     "package.nls*.json",
-    "dist/**",
+    "dist/extension/**",
     "media/**",
     "README.md",
     "README.zh-CN.md",
@@ -38,14 +38,12 @@
   "main": "./dist/extension/extension.js",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json && tsc -p tsconfig.webview.json",
-    "dev": "vite",
-    "format": "oxfmt --write webview package.json oxlint.config.mts .oxfmtrc.json vite.config.mts vitest.config.mts",
-    "format:check": "oxfmt --check webview package.json oxlint.config.mts .oxfmtrc.json vite.config.mts vitest.config.mts",
-    "lint": "oxlint --max-warnings=0 webview",
+    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "format": "oxfmt --write src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
+    "format:check": "oxfmt --check src/tree.ts src/time.ts package.json oxlint.config.mts .oxfmtrc.json vitest.config.mts",
+    "lint": "oxlint --max-warnings=0 src",
     "lint:fix": "pnpm run lint --fix",
     "package": "node -e \"require('node:fs').mkdirSync('release-artifact', { recursive: true })\" && vsce package --no-dependencies --out release-artifact",
-    "preview": "pnpm run build && node test/preview.mjs",
     "release:check": "node scripts/check-release.mjs",
     "release:dry": "release-it --dry-run",
     "release:prepare": "release-it",
@@ -54,25 +52,16 @@
     "test:watch": "vitest",
     "vscode:prepublish": "pnpm run build"
   },
-  "dependencies": {
-    "react": "19.3.1",
-    "react-dom": "19.3.1"
-  },
   "devDependencies": {
     "@release-it/bumper": "8.0.1",
     "@release-it/conventional-changelog": "12.0.2",
     "@types/node": "^22.0.0",
-    "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0",
     "@types/vscode": "~1.100.0",
-    "@vitejs/plugin-react": "6.1.2",
     "@vscode/vsce": "^3.0.0",
-    "jsdom": "30.1.3",
     "oxfmt": "0.74.0",
     "oxlint": "1.89.0",
     "release-it": "21.1.1",
     "typescript": "~5.9.0",
-    "vite": "8.3.5",
     "vitest": "5.0.5"
   },
   "contributes": {
@@ -88,13 +77,19 @@
     "views": {
       "codexProjectChats": [
         {
-          "type": "webview",
+          "type": "tree",
           "id": "codexProjectChats.list",
           "name": "%view.title%",
           "contextualTitle": "Codex Chats List"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "codexProjectChats.list",
+        "contents": "%welcome.noWorkspace%"
+      }
+    ],
     "commands": [
       {
         "command": "codexProjectChats.open",
@@ -106,14 +101,53 @@
         "title": "%command.refresh%",
         "category": "Codex Chats List",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "codexProjectChats.selectScope",
+        "title": "%command.scope%",
+        "category": "Codex Chats List",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "codexProjectChats.search",
+        "title": "%command.search%",
+        "category": "Codex Chats List",
+        "icon": "$(search)"
+      },
+      {
+        "command": "codexProjectChats.clearSearch",
+        "title": "%command.clearSearch%",
+        "category": "Codex Chats List",
+        "icon": "$(clear-all)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "codexProjectChats.selectScope",
+          "when": "view == codexProjectChats.list",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codexProjectChats.search",
+          "when": "view == codexProjectChats.list",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codexProjectChats.clearSearch",
+          "when": "view == codexProjectChats.list && codexProjectChats.hasSearch",
+          "group": "navigation@3"
+        },
+        {
           "command": "codexProjectChats.refresh",
           "when": "view == codexProjectChats.list",
-          "group": "navigation"
+          "group": "navigation@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "codexProjectChats.clearSearch",
+          "when": "codexProjectChats.hasSearch"
         }
       ]
     },

@@ -1,7 +1,7 @@
 import { createLocalizer, type Localize } from './i18n';
 import path from 'node:path';
 
-/** Minimal thread metadata; conversation bodies never enter the view model. */
+/** Conversation metadata displayed in the project tree. */
 export interface Chat {
   id: string;
   title: string;
@@ -14,7 +14,7 @@ export interface ChatPage { chats: Chat[]; nextCursor: string | null }
 export interface ProjectGroup { key: string; name: string; cwd: string; current: boolean; chats: Chat[] }
 export type Scope = 'current' | 'all';
 
-/** Parse untrusted protocol data without passing raw API objects into a webview. */
+/** Validate and select fields from the app-server response. */
 export function parsePage(value: unknown, t: Localize = createLocalizer()): ChatPage {
   if (!isRecord(value) || !Array.isArray(value.data)) throw new Error(t('errorInvalidResponse'));
   const chats: Chat[] = [];

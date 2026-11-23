@@ -1,25 +1,21 @@
-# Sidebar design and architecture
+# 原生侧栏设计
 
-The UI uses a native VS Code Webview View, not a separate website.
+## 项目树承接浏览和续聊
 
-- A current/all-project control and title search stay visible at the top.
-- Exact working directories define groups. Identical folder names include paths; narrow layouts retain path suffixes and expose full paths on hover.
-- The current project expands initially. Other projects collapse initially. Search temporarily expands matching groups without overwriting the saved collapse state.
-- Conversation rows use a compact single line (32px minimum height), with an ellipsized title on the left and a short recency label aligned right. Repeated conversation icons are omitted to preserve title width; hovering reveals the full title, path, and exact timestamp. Selecting a row shows a short opening status and reveals the existing official Codex view, respecting its placement and avoiding editor tabs.
-- Colors, fonts, focus, selection, and scrolling use VS Code theme variables. No remote fonts or images are loaded by the webview.
-- Conversation hover details use a compact theme-aware tooltip (up to 280px wide and 180px tall), with a full title and inline labels for conversation recency and project path. It aligns to the right with a 12px inset and reserves at least 64px on the left for moving the pointer between rows. It prefers placement above the row, falls back below when needed, and scrolls within the available space without covering its anchor. Titles retain their complete text in the model; list ellipsis is presentational. Long content wraps within the viewport; keyboard focus also reveals details, Escape dismisses them, and scrolling or refreshing closes stale details.
-- VS Code contribution labels use native package.nls resources. Extension and webview copy share a typed bilingual catalog selected from the VS Code display language: Chinese locales use Simplified Chinese, all other locales fall back to English. Conversation content, paths and upstream diagnostics remain unchanged.
-- Busy and opening changes update existing row nodes. Result changes restore focus by conversation ID without taking focus from search or scope controls. Relative time labels update once per minute while the document is visible, pause while hidden, and catch up on return.
-- Loading, missing workspace, empty history, unmatched search, interface failure, and pagination have explicit states.
-- Pagination reads 50 records at a time. Counts represent loaded conversations.
-- While the view is visible, the host polls conversation metadata five seconds after the previous query finishes. Hiding the view pauses polling; showing it again triggers an immediate background refresh. Automatic refreshes keep the existing rows visible, reload the number of pages already loaded from the first page using fresh cursors, and replace the result only after the complete query succeeds. Unchanged metadata, workspace roots, and pagination state do not produce a webview update, preserving hover details and focus.
+扩展通过 `createTreeView` 注册原生侧栏，使用原有视图 ID、命令和设置。树有项目、对话和加载更多三种节点。同名项目显示完整路径，项目内按最近对话时间从新到旧排列。当前项目默认展开，其他项目默认收起。标题栏提供范围、标题筛选、清空筛选和刷新操作。原生提示显示完整标题、最近对话时间和路径。
 
-## Ownership
+`src/tree.ts` 把宿主缓存转换成树节点，使用由路径或会话 ID 派生的稳定节点 ID。筛选时使用独立节点 ID，匹配项目默认展开。清空筛选后，原生树读取先前记录的展开偏好。选择会话节点时，`src/routing.ts` 通过当前窗口的 URI 调用官方 Codex 侧栏。
 
-`src/client.ts` owns one stdio app-server child process and JSONL request lifecycle. `src/model.ts` validates metadata, normalizes paths, and groups results. `src/extension.ts` owns the VS Code view, workspace scope, pagination, and stale-request handling. `src/routing.ts` targets the current window through the official URI handler. `src/protocol.ts` defines and validates the host-facing messages and types the outbound state. The presentation layer lives in `webview/src/`: `main.ts` starts the view; `app/mount.tsx` mounts the React root; and `app/App.tsx` composes host state, the header, conversation list, status area, and tooltip. `host/useHostBridge.ts` owns message subscription and readiness. `components/header/` contains separate scope, search, and toolbar components; `components/status/` contains feedback and pagination. `features/conversations/` owns project groups, rows, list expansion, focus restoration, hover behavior, and pure time formatting. Tooltip rendering and its interaction hook are separate modules. `hooks/useVisibleClock.ts` owns the visibility-aware clock. `i18n/` separates the React context from catalog parsing. Global theme/reset rules live in `styles/`; header, status, and conversation CSS live next to their owners. UI and time tests are colocated with the source. Stable project paths and conversation IDs serve as React keys. Expansion state is local and persisted through the private bridge; received host state is the source of conversation data. Vite builds these modules with production React and React DOM into hashed JS and CSS files under `dist/webview/`. `src/webview-assets.ts` resolves their names from the generated manifest before converting them with `asWebviewUri`. The production HTML remains a host template so localization and CSP nonces come from the actual Webview. The extension host compiles separately to CommonJS in `dist/extension/`. Only generated Webview files are exposed through `localResourceRoots`; `media/` contains icons. Shared host types are imported with `import type` and do not bring Node or VS Code APIs into the browser bundle.
+## 原生视图的可见性控制更新
 
-The webview receives only minimized metadata and constructs conversation text using DOM text content. A CSP limits scripts and resources. Opening a conversation requires an ID already present in the loaded list. The host owns the polling timer separately from the search debounce. Automatic refreshes do not overlap an active query or pending search, and user actions can supersede a background refresh through the same generation guard used for stale requests. Closing the view cancels both timers, removes its listeners, invalidates outstanding results, and disposes only the app-server process created by this extension. A closed or not-yet-ready view cannot start a background list request.
+`src/extension.ts` 负责范围、搜索、分页、刷新及请求失效处理。QuickPick 提交范围，按工作区保存。InputBox 确认后替换筛选，取消时保留原结果。查询条件改变时游标随旧结果一起失效。追加时沿用上一页的目录和搜索条件。
 
-## Local development
+`src/client.ts` 通过本地 stdio 调用 Codex app-server。筛选在服务端分页前执行，每页读取最多 50 条。`src/model.ts` 验证返回字段，按工作目录分组，保留最近对话时间和会话 ID。
 
-`vite.config.mts` owns the browser pipeline. The dev server renders `webview/index.html`, injects the selected catalog, and starts `webview/dev/main.ts`. That entry installs the synthetic bridge and theme before loading the real React interface. React Fast Refresh and CSS HMR operate in this standalone browser preview. The portable HTML preview uses the same bridge plus the actual production assets. Neither development entry is imported by the production entry, and the installed extension uses only packaged assets.
+侧栏可见时，前一轮查询结束五秒后更新；隐藏时取消等待中的轮询和时间标签定时器。再次打开侧栏时先保留已加载节点，再按新游标刷新此前加载的页数。当后台查询完整成功时提交结果，失败时保留现有节点供浏览，并在视图中提示重试。
+
+## 工作区状态和发布包
+
+按工作区保存的只有选择范围和未筛选树的展开偏好。查询结果、加载页数和筛选词存于扩展宿主内存。升级后的原生树重新记录展开偏好。
+
+TypeScript 编译到 `dist/extension/`，VSIX 包含宿主代码、图标、语言资源和公开文档。架构图见 [ARCH.md](ARCH.md)。

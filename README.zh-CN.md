@@ -2,81 +2,58 @@
 
 [English](README.md) · 简体中文
 
-一个只做项目分类和跳转的 VS Code 扩展。打开项目，看到相关 Codex 对话，点一下回到官方 Codex。
+按项目浏览已有的 Codex 对话，并在官方侧栏中继续。1.2.0 使用 VS Code 原生项目树，支持标题筛选、分页和刷新。
 
-> 上游在 macOS Apple Silicon 上完成了端到端验证。界面跟随 VS Code 显示语言，中文环境使用简体中文，其他语言环境使用英文。
+## 安装和浏览
 
-## 使用
+1. 安装并登录 [官方 Codex 扩展](https://marketplace.visualstudio.com/items?itemName=openai.chatgpt)。
+2. 在扩展商店搜索 `@id:pujie.codex-chats-list` 安装 **Codex Chats List**。使用离线包时，选择 **扩展 → … → 从 VSIX 安装**。
+3. 打开项目文件夹，点击活动栏的 **Codex 项目对话**。也可在命令面板执行 **Codex Chats List: 打开项目对话**。
+4. 展开项目并选择对话，官方 Codex 侧栏会在原有位置打开对应会话。
 
-1. 安装并登录官方 **Codex** 扩展（`openai.chatgpt`）。
-2. 在 VS Code 扩展商店搜索 `@id:pujie.codex-chats-list`，安装 [**Codex Chats List**](https://marketplace.visualstudio.com/items?itemName=pujie.codex-chats-list)（发布者 `pujie`）。也可通过 **扩展 → … → 从 VSIX 安装** 安装离线包。
-3. 打开项目文件夹，点击活动栏的 **Codex 项目对话** 图标。
-4. 顶部直接选择 **当前项目 / 全部项目**，在搜索框输入标题关键词。
-5. 展开项目，点击对话，在已有的官方 Codex 对话区中继续。如果你把 Codex 放在右侧，就在右侧切换，不新建中间编辑器标签页。
-
-可通过 VS Code 的 **Configure Display Language（配置显示语言）** 切换语言，并重启 VS Code。对话标题和项目路径保留原文，不自动翻译。
-
-命令面板也可执行 **Codex Chats List: 打开项目对话**。
-
-当前项目与保存的 `cwd` 精确匹配，兼顾工作区符号链接的真实路径；多根工作区匹配全部根目录。子目录和 worktree 分别分组。没有打开文件夹时可直接查看全部项目。同名目录显示路径。
-
-每页加载 50 条，分类计数是当前已加载数量；用“加载更多对话”继续。目录筛选与标题搜索在服务端分页前执行，因此不会只搜索第一批对话。只展示未归档、交互式本地会话，不展示子代理和批处理会话。展开状态在视图恢复期间保留，范围选择按工作区保存。
-
-## 列表与悬停详情
+[Marketplace 商品页](https://marketplace.visualstudio.com/items?itemName=pujie.codex-chats-list) · [反馈问题](https://github.com/jaypume/vscode-codex-chats-list/issues)
 
 | 操作 | 使用方式 |
 | --- | --- |
-| 查找对话 | 选择当前项目或全部项目，再输入标题关键词。 |
-| 判断新旧 | 每行左侧为标题，右侧为**最近对话时间**，显示和排序统一使用 Codex 的 `recencyAt`，项目内从新到旧排列；它不代表记录更新时间或最后回复时间。「昨天」「10/17」用于粗略筛选，不代表创建时间；视图可见时会自动更新时间标签。 |
-| 查看完整信息 | 悬停对话，查看完整标题、精确到分钟的最近对话时间和项目路径。浮层靠右展示，左侧留出鼠标上下切换对话的通道。 |
-| 使用键盘 | 按 Tab 聚焦对话并查看详情，按 Enter 或空格打开，按 Esc 关闭提示。 |
-| 刷新与分页 | 面板可见时自动更新列表，每次查询完成 5 秒后再次检查；隐藏时暂停，重新显示时立即更新。也可点击刷新图标立即读取。点击「加载更多对话」继续读取下一页，项目计数表示当前已加载的匹配对话数。 |
+| 切换范围 | 从标题栏打开 **切换对话范围**，选择 **当前项目** 或 **全部项目**。 |
+| 按标题筛选 | 打开 **搜索对话标题**，输入关键词并回车。结果继续按项目分组。点击 **清除对话搜索**，或提交空关键词以还原列表。 |
+| 查看详情 | 每条对话显示最近对话时间。悬停查看完整标题、时间和项目路径。 |
+| 加载和刷新 | 点击树末尾的 **加载更多对话**。点击 **刷新对话** 重新读取第一页。 |
 
-长标题在列表中省略，完整内容在浮层中换行；特别长的内容可在浮层内滚动。缺少最近对话时间的记录显示「时间未知」。
+当前项目精确匹配工作目录，兼顾工作区符号链接的真实路径。子目录和 worktree 分别分组，可在 **全部项目** 中查看。没有打开文件夹时也可浏览全部项目。同名项目显示路径。
 
-自动刷新会更新已经加载的各页，读取期间保留现有列表；结果未变化时保持界面和悬停详情不变。
+Codex 在分页前按标题和目录筛选。每页最多加载 50 条，计数表示已加载的结果。项目内按最近对话时间从新到旧排列，展示未归档的本地交互式对话。
+
+视图可见时，每轮查询完成五秒后再次更新。后台刷新保留已加载页，隐藏侧栏时暂停轮询。范围和项目展开偏好按工作区保存。搜索时匹配的分组默认展开，清空筛选后回到普通项目树的展开偏好。
 
 ## 界面预览
 
-以下展示简体中文界面，均为示例数据，不含真实会话。[英文说明](README.md#preview)提供对应的英文界面示例。
+以下截图使用示例数据。[英文预览](README.md#preview)提供对应界面。
 
-![当前项目](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/current-project.png)
+| 当前项目 | 全部项目 |
+| --- | --- |
+| ![当前项目的原生对话树](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/current-project.png) | ![按路径分组的原生项目树](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/all-projects.png) |
 
-![全部项目](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/all-projects.png)
+![原生提示显示对话标题、时间和路径](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/hover-details.png)
 
-悬停详情：完整信息靠右展示，左侧保留鼠标切换通道。
+## 兼容与隐私
 
-![悬停详情与左侧鼠标通道](https://raw.githubusercontent.com/jaypume/vscode-codex-chats-list/main/docs/images/hover-details.png)
+扩展要求 VS Code 1.100 或更新版本。界面跟随 VS Code 的显示语言，中文环境使用简体中文，其他语言环境使用英文。对话标题和项目路径保留原文。
 
-## 边界与兼容
+| 情况 | 处理方式 |
+| --- | --- |
+| 当前项目没有结果 | 会话的工作目录须与工作区根目录匹配。子目录或 worktree 下启动的对话可在 **全部项目** 中查找。 |
+| 找不到 Codex | 启用官方扩展，或在 `codexProjectChats.cliPath` 中指定当前宿主的可执行文件绝对路径。 |
+| 打开对话失败 | 先打开官方 Codex 侧栏再试。跳转依赖官方扩展已有的 URI 路径，反馈时请附上两个扩展的版本。 |
+| WSL、SSH 或容器 | 在远程工作区安装两个扩展。会话记录按宿主读取。Windows 将 Codex 转发到 WSL 时，请打开 WSL 工作区。 |
 
-- 不修改官方扩展，不修改会话内容，不读取账号凭据，不发送提示词。
-- 通过官方内置 Codex 的 `app-server` 子进程读取 `thread/list`；使用 `useStateDbOnly` 避免扫描修复历史。服务可能自行产生运行日志和维护内部状态，本扩展不直接操作 Codex 数据库。
-- 只向面板传递会话 ID、标题（无标题时采用首条消息摘要）、cwd 和最近对话时间；不读取或渲染完整对话。
-- 不实现归档、删除、标签、自定义分类或聊天功能。可见分类是目录分组，不是权限隔离。
-- 跳转先由 `vscode.env.asExternalUri` 为 `vscode://openai.chatgpt/local/<id>` 生成绑定当前窗口的地址，再唤起官方侧栏并交给其 URI 处理器。遵循已有 Codex 对话区的位置，不新建编辑器标签页。官方 URI 路径未承诺稳定，需要在官方更新后验证。
-- 运行在 workspace extension host。WSL、SSH 和容器需要在相应远程窗口安装本扩展与官方 Codex；跨主机历史不合并。本地 Windows 窗口把 Codex 重定向到 WSL 的混合模式不支持，请打开 WSL 窗口。
-- 上游的端到端测试使用 macOS Apple Silicon、VS Code 1.143.1 和 `openai.chatgpt` 26.1021.22027。
-- 官方内置可执行文件布局若变化，可在用户设置中指定 `codexProjectChats.cliPath` 的绝对路径。
-- 本扩展由第三方独立维护。
+扩展通过本地官方 `codex app-server` 的 `thread/list` 读取会话 ID、标题、工作目录和最近对话时间，并启用 `useStateDbOnly`。没有标题时可使用服务提供的首条消息摘要。官方可执行文件管理自己的运行状态和日志。跳转使用官方扩展的 `/local/<id>` URI。
 
-## 从原型迁移
+如果已安装上游扩展或早期原型，请先停用它们，以免出现重复入口。Codex 独立保存会话。
 
-如果已安装上游扩展或本地原型，请先停用它们，避免显示重复的对话列表。Codex 独立保存对话记录。
+## 开发与反馈
 
-## 反馈与贡献
-
-- 普通问题请提交 [GitHub Issue](https://github.com/jaypume/vscode-codex-chats-list/issues)。
-- 安全漏洞请使用[私密安全报告](https://github.com/jaypume/vscode-codex-chats-list/security/advisories/new)，不要公开会话记录或凭据。
-- 参与开发请参阅 [CONTRIBUTING.md](https://github.com/jaypume/vscode-codex-chats-list/blob/main/CONTRIBUTING.md)。采用 [MIT 许可](https://github.com/jaypume/vscode-codex-chats-list/blob/main/LICENSE)。
-
-## 发布方式
-
-使用 release-it 在本地同步版本号和生成更新日志，通过 CI 后打包 VSIX，在 Marketplace 发布者后台手动上传。公开包校验通过后再记录版本标签。具体命令参阅[发布说明](https://github.com/jaypume/vscode-codex-chats-list/blob/main/docs/releasing.md)。不会创建 GitHub Release，也不会发布 npm 包。
-
-## 开发
-
-开发使用 Node.js 24.18.0（见 `.nvmrc`）和 pnpm 12.15.0（由 `packageManager` 固定版本）。
+开发使用 `.nvmrc` 指定的 Node.js 24.18.0，以及 `packageManager` 指定的 pnpm 12.15.0。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -87,17 +64,6 @@ pnpm test
 pnpm run package
 ```
 
-Vitest 直接运行 TypeScript 源码测试，`pnpm run check` 同时检查扩展源码、测试和 Webview 的类型。开发时可使用 `pnpm run test:watch`。扩展宿主代码编译为 CommonJS，输出到 `dist/extension/`；`webview/src/` 中的 React + TypeScript 界面代码通过 Vite 构建到 `dist/webview/`。`media/` 仅保留图标资源。前端按应用入口、宿主通信、控件和对话功能组织，组件、Hook、功能样式与测试就近维护；详见 [Webview 开发说明](https://github.com/jaypume/vscode-codex-chats-list/blob/main/webview/README.md)。CI 同时检查 Oxlint 与 Oxfmt。React 与 React DOM 已合并进浏览器构建产物，VSIX 仅包含构建代码、媒体资源和公开文档，不携带 `node_modules/`。
+扩展宿主编译到 `dist/extension/`。VSIX 包含编译后的宿主代码、图标、语言资源和公开文档，输出为 `release-artifact/codex-chats-list-<版本号>.vsix`。详见[开发说明](https://github.com/jaypume/vscode-codex-chats-list/blob/main/CONTRIBUTING.md)和[发布流程](https://github.com/jaypume/vscode-codex-chats-list/blob/main/docs/releasing.md)。
 
-运行 `pnpm dev` 可在 `http://127.0.0.1:5173/` 查看带 React 热更新的示例界面，追加 `?lang=en` 切换英文。预览使用示例数据；实际安装的扩展加载 VSIX 内的构建产物。
-
-运行 `pnpm run package` 后，VSIX 统一输出到 `release-artifact/codex-chats-list-<版本号>.vsix`。该目录会自动创建，已加入 Git 忽略规则。
-
-环境准备、示例界面预览和可选集成测试参阅 [CONTRIBUTING.md](https://github.com/jaypume/vscode-codex-chats-list/blob/main/CONTRIBUTING.md)。
-
-## 接口参考
-
-- [官方 App Server](https://learn.chatgpt.com/docs/app-server)
-- [VS Code Webview View](https://code.visualstudio.com/api/extension-guides/webview)
-
-本扩展是 [Codex Project Chats](https://github.com/cixiangtao/codex-project-chats) 的 fork。
+普通问题可在 [Issues](https://github.com/jaypume/vscode-codex-chats-list/issues) 反馈，漏洞请按[安全说明](https://github.com/jaypume/vscode-codex-chats-list/blob/main/SECURITY.md)私密提交。本扩展是 [Codex Project Chats](https://github.com/cixiangtao/codex-project-chats) 的独立 fork，采用 MIT 许可。

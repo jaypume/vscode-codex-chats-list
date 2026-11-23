@@ -11,19 +11,14 @@ with ZipFile(archive) as package:
     packed = json.loads(package.read("extension/package.json"))
     for field in ("name", "publisher", "displayName", "version", "repository", "homepage", "bugs", "main"):
         assert packed[field] == manifest[field], f"Manifest mismatch: {field}"
+    views = packed["contributes"]["views"]["codexProjectChats"]
+    assert len(views) == 1 and views[0]["id"] == "codexProjectChats.list" and views[0]["type"] == "tree"
     for name in ("extension/readme.md", "extension/changelog.md", "extension/LICENSE.txt",
                  "extension/README.zh-CN.md", "extension/SUPPORT.md", "extension/media/icon.png",
-                 "extension/dist/webview/view.html", "extension/dist/webview/manifest.json",
-                 "extension/dist/extension/extension.js",
+                 "extension/dist/extension/extension.js", "extension/dist/extension/tree.js",
                  "extension/package.nls.json", "extension/package.nls.zh.json", "extension/package.nls.zh-cn.json"):
         assert name in names, f"Missing public asset: {name}"
-    assets = json.loads(package.read("extension/dist/webview/manifest.json"))
-    entries = [item for item in assets.values() if item.get("isEntry")]
-    assert len(entries) == 1 and entries[0].get("css"), "Missing Webview entry/styles"
-    for item in assets.values():
-        for asset in [item["file"], *item.get("css", [])]:
-            assert "extension/dist/webview/" + asset in names, f"Missing built asset: {asset}"
-    allowed = ("extension/dist/extension/", "extension/dist/webview/", "extension/media/")
+    allowed = ("extension/dist/extension/", "extension/media/")
     docs = {"extension/package.json", "extension/readme.md", "extension/changelog.md",
             "extension/LICENSE.txt", "extension/README.zh-CN.md", "extension/SUPPORT.md",
             "extension/package.nls.json", "extension/package.nls.zh.json", "extension/package.nls.zh-cn.json"}
