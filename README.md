@@ -17,7 +17,7 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 | --- | --- |
 | Switch the scope | Click the filter button in the view toolbar to switch between **Current project** and **All projects**. |
 | Group and filter | Use **Group Conversations** to select **By Repository** or **By Folder**. The view menu has **Toggle Non-Git Folders**. |
-| Search titles | Select the magnifier and type a title keyword. The tree updates within the selected scope, **Current project** or **All projects**. Enter keeps the filter and Escape restores the previous results. Use **Clear Conversation Search** to reset it. |
+| Search titles | Select the magnifier and type a title keyword. Use the button in the search box to switch between the latest configured number per project and all indexed conversations within **Current project** or **All projects**. Enter keeps the filter and Escape restores the previous results. |
 | See details | A project's right-hand badge shows its conversation count, capped at `99`, followed by the age of its latest conversation. Activity ages use days, weeks, months, or years. Ages longer than two characters appear after the title. Hover for the exact count, timestamp, or path. |
 | Sort all projects | In **All projects**, open the view's **…** menu and choose **Sort Projects**. Sort by name or by the most recent conversation. |
 | Pin a project or conversation | Right-click a project group or conversation and choose **Pin** or **Unpin**. Pinned groups come first. Pinned conversations come first within their group. |
@@ -26,7 +26,7 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 | Rename a conversation | Right-click a conversation and choose **Rename Conversation…**. Enter a title to update the conversation in Codex and in the project list. |
 | Start a conversation in a folder | Right-click a project group or an Explorer folder and choose **New Codex Conversation Here**. If the recorded directory is unavailable, choose a folder. The conversation opens in the official Codex sidebar in the current window. |
 | Delete conversations | Right-click a conversation or project group and choose **Delete Conversations…**. Confirm permanent deletion in Codex. Project deletion covers all indexed conversations in the group, including those excluded by the current filters. |
-| Load and refresh | **Current project** and **All projects** show all matching indexed conversations. Older conversations appear automatically as the index fills. **Refresh Conversations** checks recent activity. |
+| Load and refresh | Each project initially shows up to 50 conversations. Change this in **Conversations Per Project** (`codexChatsList.conversationsPerProject`). Use **Load more conversations** at the bottom of a project to show more from the index. **Reset Conversation List Lengths** or restarting VS Code restores the configured limit. **Refresh Conversations** checks recent activity. |
 
 With **By Repository**, the current scope matches either the workspace repository’s `origin` or `upstream`. A matching remote also finds conversations from moved checkouts. Local repositories with no remote group under their Git root.
 
@@ -34,7 +34,7 @@ GitHub repository IDs also group conversations across repository renames. Reposi
 
 Ordinary folders use their directory names and remain distinct by path. If the folder is missing and Codex saved no Git identity, the group shows **Source unknown**. The folder filter hides only confirmed non-Git folders. **By Folder** keeps separate working-directory groups and matches exact workspace paths for **Current project**.
 
-The first scan builds the index in the background while the view is visible. Results appear as each page arrives. Windows with the same VS Code profile, extension host, and Codex source share the index. After a restart, the view shows cached results and resumes from the saved cursor. Scope, grouping, and title search use the cached results.
+The first scan builds the index in the background while the view is visible. Older conversations become available to load and search as the index fills. Windows with the same VS Code profile, extension host, and Codex source share the index. After a restart, the view shows cached results and resumes from the saved cursor. Scope, grouping, and title search use the cached results.
 
 The index stores conversation IDs and the metadata needed for the list, such as titles, paths, timestamps, and sanitized repository keys. Codex manages conversation contents. Background updates check recent activity while the view is visible. Selecting a cached conversation checks its metadata with Codex before opening. Older renames or archives may appear stale until that conversation is selected. Hosts without Node SQLite use an in-memory index.
 

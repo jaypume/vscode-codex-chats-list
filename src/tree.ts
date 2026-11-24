@@ -6,6 +6,7 @@ import { formatConversationDate } from './time';
 
 export const VIEW_ID = 'codexChatsList.list';
 export const OPEN_CONVERSATION = 'codexChatsList.openConversation';
+export const LOAD_MORE_CONVERSATIONS = 'codexChatsList.loadMoreConversations';
 const AUTO_EXPAND_LIMIT = 50;
 const DATE_SCHEME = 'codex-chats-list-date';
 const PROJECT_ACTIVITY_PATH = '/project/';
@@ -24,6 +25,7 @@ type ProjectNode = {
   kind: 'project';
   group: ProjectGroup;
   latestConversationAt: number;
+  visibleLimit?: number;
   qualifier?: string;
   filtered: boolean;
   expanded: boolean;
@@ -31,7 +33,11 @@ type ProjectNode = {
   hidden: boolean;
 };
 type ChatFlags = { pinned: boolean; hidden: boolean; assignedRepository?: string };
-export type TreeNode = ProjectNode | ({ kind: 'chat'; chat: Chat; filtered: boolean } & ChatFlags);
+export type MoreNode = { kind: 'more'; projectKey: string };
+export type TreeNode =
+  | ProjectNode
+  | MoreNode
+  | ({ kind: 'chat'; chat: Chat; filtered: boolean } & ChatFlags);
 
 const t = createLocalizer(vscode.env.language);
 const { locale } = localization(vscode.env.language);
@@ -113,7 +119,12 @@ export class ChatTree
   }
 
   update(
-    groups: (ProjectGroup & { pinned: boolean; hidden: boolean; latestConversationAt: number })[],
+    groups: (ProjectGroup & {
+      pinned: boolean;
+      hidden: boolean;
+      latestConversationAt: number;
+      visibleLimit?: number;
+    })[],
     scope: Scope,
     filtered: boolean,
     opening: string | null,
@@ -126,6 +137,7 @@ export class ChatTree
       kind: 'project',
       group,
       latestConversationAt: group.latestConversationAt,
+      visibleLimit: group.visibleLimit,
       qualifier: qualifiers.get(group.key),
       filtered,
       pinned: group.pinned,
@@ -185,7 +197,7 @@ export class ChatTree
   getChildren(node?: TreeNode): TreeNode[] {
     if (!node) return this.nodes;
     if (node.kind !== 'project') return [];
-    return node.group.chats
+    const chats = node.group.chats
       .map((chat) => ({
         kind: 'chat' as const,
         chat,
@@ -193,9 +205,19 @@ export class ChatTree
         ...this.chatFlags(chat.id),
       }))
       .sort((a, b) => Number(b.pinned) - Number(a.pinned));
+    const limit = node.visibleLimit;
+    if (limit === undefined || chats.length <= limit) return chats;
+    return [...chats.slice(0, limit), { kind: 'more', projectKey: node.group.key }];
   }
 
   getTreeItem(node: TreeNode): vscode.TreeItem {
+    if (node.kind === 'more') {
+      const item = new vscode.TreeItem(t('loadMore'));
+      item.id = `more:${node.projectKey}`;
+      item.iconPath = new vscode.ThemeIcon('ellipsis');
+      item.command = { command: LOAD_MORE_CONVERSATIONS, title: t('loadMore'), arguments: [node] };
+      return item;
+    }
     const prefix = node.filtered ? 'filtered:' : '';
     const hidden = node.hidden ? '.hidden' : '';
     if (node.kind === 'project') {

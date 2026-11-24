@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   cliPath: undefined as string | undefined,
   legacyCliPath: '/fixture/codex',
   dateBadges: true,
+  conversationLimit: 50,
 }));
 vi.mock('../src/client', () => ({ CodexClient: class {
   constructor(...args: unknown[]) { mocks.construct(...args); }
@@ -47,8 +48,9 @@ vi.mock('vscode', () => ({
   workspace: {
     workspaceFolders: [{ uri: { scheme: 'file', fsPath: '/fixture' } }],
     getConfiguration: (section: string) => ({
-      get: () => section === 'codexProjectChats' ? mocks.legacyCliPath
-        : section === 'explorer.decorations' ? mocks.dateBadges : false,
+      get: (key: string) => section === 'codexProjectChats' ? mocks.legacyCliPath
+        : section === 'explorer.decorations' ? mocks.dateBadges
+        : section === 'codexChatsList' && key === 'conversationsPerProject' ? mocks.conversationLimit : false,
       inspect: () => ({ globalValue: mocks.cliPath, defaultValue: '' }),
     }),
     onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
@@ -107,12 +109,16 @@ class TestInputBox {
   private readonly changed = new Signal<string>();
   private readonly accepted = new Signal<void>();
   private readonly hidden = new Signal<void>();
+  private readonly triggered = new Signal<vscode.QuickInputButton>();
   readonly onDidChangeValue = this.changed.listen;
   readonly onDidAccept = this.accepted.listen;
   readonly onDidHide = this.hidden.listen;
+  readonly onDidTriggerButton = this.triggered.listen;
+  buttons: readonly vscode.QuickInputButton[] = [];
   value = '';
   title = '';
   type(value: string) { this.value = value; this.changed.fire(value); }
+  switchSearchRange() { this.triggered.fire(this.buttons[0]!); }
   accept() { this.accepted.fire(); }
   hide() { this.hidden.fire(); }
   show() {}
@@ -208,6 +214,7 @@ beforeEach(() => {
   mocks.updateScope.mockReset().mockResolvedValue(undefined);
   mocks.cliPath = undefined;
   mocks.dateBadges = true;
+  mocks.conversationLimit = 50;
   mocks.legacyCliPath = '/fixture/codex';
 });
 afterEach(() => {
@@ -223,7 +230,8 @@ test('all commands use the fork namespace and open focuses the fork view', async
     'codexChatsList.hide', 'codexChatsList.unhide', 'codexChatsList.moveToRepository', 'codexChatsList.restoreRepository',
     'codexChatsList.toggleHidden', 'codexChatsList.newConversation', 'codexChatsList.rename', 'codexChatsList.delete',
     'codexChatsList.toggleFolders', 'codexChatsList.showAll', 'codexChatsList.showCurrent',
-    'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.openConversation',
+    'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.loadMoreConversations',
+    'codexChatsList.resetConversationLimits', 'codexChatsList.openConversation',
   ]);
   await fixture.run('open');
   expect(mocks.executeCommand).toHaveBeenCalledWith('codexChatsList.list.focus');
@@ -367,7 +375,7 @@ test('unchanged polling does not publish state and hidden views pause the index'
   expect(mocks.list).toHaveBeenCalledTimes(5);
 });
 
-test('Current displays all indexed conversations while older pages load in the background', async () => {
+test('Current caps each project while older conversations remain available from the index', async () => {
   const chats = Array.from({ length: 60 }, (_, i) => ({
     ...page('thread-' + i).chats[0]!, recencyAt: 60 - i,
   }));
@@ -376,16 +384,41 @@ test('Current displays all indexed conversations while older pages load in the b
     .mockResolvedValueOnce({ chats: chats.slice(50), nextCursor: null });
   const fixture = await setup();
   await fixture.ready();
-  const visibleChats = () => fixture.tree.getChildren().flatMap(node => fixture.tree.getChildren(node));
+  const children = () => fixture.tree.getChildren().flatMap(node => fixture.tree.getChildren(node));
+  const visibleChats = () => children().filter(node => node.kind === 'chat');
   expect(visibleChats()).toHaveLength(50);
   expect(fixture.tree.getChildren()).toHaveLength(1);
   expect(fixture.api.snapshot().indexed).toBe(false);
   await vi.advanceTimersByTimeAsync(150);
-  expect(visibleChats()).toHaveLength(60);
+  expect(visibleChats()).toHaveLength(50);
   expect(fixture.tree.getChildren()).toHaveLength(1);
   expect(fixture.api.snapshot().indexed).toBe(true);
-  await fixture.search('thread-59');
+  expect(fixture.tree.getTreeItem(fixture.tree.getChildren()[0]!).tooltip).toContain('60 chats');
+  const more = children().at(-1)!;
+  expect(fixture.tree.getTreeItem(more)).toMatchObject({ label: 'Load more conversations' });
+  await fixture.run('loadMoreConversations', more);
+  expect(visibleChats()).toHaveLength(60);
+  expect(children()).toHaveLength(60);
+  expect(mocks.executeCommand).toHaveBeenCalledWith('setContext', 'codexChatsList.expandedHistory', true);
+
+  const draft = await fixture.beginSearch();
+  expect(draft.input.title).toContain('Latest 50 per project');
+  draft.input.type('thread-59');
+  await vi.advanceTimersByTimeAsync(120);
+  expect(visibleChats()).toHaveLength(0);
+  draft.input.switchSearchRange();
+  expect(draft.input.title).toContain('All conversations');
   expect(visibleChats()).toMatchObject([{ kind: 'chat', chat: { id: 'thread-59' } }]);
+  draft.input.hide();
+  await draft.done;
+  expect(visibleChats()).toHaveLength(60);
+
+  await fixture.run('resetConversationLimits');
+  expect(visibleChats()).toHaveLength(50);
+  expect(children().at(-1)).toMatchObject({ kind: 'more' });
+  expect(mocks.executeCommand).toHaveBeenCalledWith('setContext', 'codexChatsList.expandedHistory', false);
+  await fixture.search('thread-59');
+  expect(visibleChats()).toHaveLength(0);
   expect(mocks.list.mock.calls.map(args => args[2])).toEqual([null, 'older']);
 });
 
@@ -471,7 +504,8 @@ test('repository deletion covers hidden and filtered conversations and leaves fa
   expect(remaining).toMatchObject([{ chat: { title: 'other' } }, { chat: { title: 'Unrelated' } }]);
 });
 
-test('All lists every cached repository and chat, sorts groups, and pins without requerying Codex', async () => {
+test('All lists every cached repository, sorts groups, and pins without requerying Codex', async () => {
+  mocks.conversationLimit = 200;
   vi.setSystemTime(new Date(2026, 10, 23, 12));
   const yesterday = new Date(2026, 10, 22, 12).getTime() / 1000;
   const chat = (id: string, repo: string, offset: number): Chat =>

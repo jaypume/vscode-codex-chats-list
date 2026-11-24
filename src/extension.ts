@@ -10,16 +10,27 @@ import { ItemFlags } from './item-flags';
 import { RepositoryCatalog } from './repositories';
 import { openInCodex } from './routing';
 import {
-  filterTitles, groupChats, pathKey, selectChats, uniquePaths, type Chat, type Grouping, type GroupOrder, type Scope, type WorkspaceProjects,
+  filterTitles, groupChats, pathKey, selectChats, sortProjectGroups, uniquePaths,
+  type Chat, type Grouping, type GroupOrder, type ProjectGroup, type Scope, type WorkspaceProjects,
 } from './model';
-import { ChatTree, OPEN_CONVERSATION, projectCountDecorations, VIEW_ID, type TreeNode } from './tree';
+import {
+  ChatTree, LOAD_MORE_CONVERSATIONS, OPEN_CONVERSATION, projectCountDecorations, VIEW_ID, type MoreNode, type TreeNode,
+} from './tree';
 
 const t = createLocalizer(vscode.env.language);
 const OFFICIAL_ID = 'openai.chatgpt';
 const INDEX_STEP_MS = 150;
 const SEARCH_LIMIT = 200;
 const SEARCH_DELAY_MS = 120;
+const DEFAULT_CONVERSATION_LIMIT = 50;
 const LEGACY_CONFIG_SECTION = 'codexProjectChats';
+type SearchCoverage = 'recent' | 'all';
+
+function conversationLimit(): number {
+  const limit = vscode.workspace.getConfiguration('codexChatsList')
+    .get<number>('conversationsPerProject', DEFAULT_CONVERSATION_LIMIT);
+  return Number.isSafeInteger(limit) && limit > 0 ? limit : DEFAULT_CONVERSATION_LIMIT;
+}
 
 function ownCliPath(): string | undefined {
   const setting = vscode.workspace.getConfiguration('codexChatsList').inspect<string>('cliPath');
@@ -77,7 +88,10 @@ class CodexChatsListView implements vscode.Disposable {
   private showFolders: boolean;
   private hiddenOnly = false;
   private search = '';
+  private searchCoverage: SearchCoverage = 'recent';
   private searchInput?: vscode.InputBox;
+  private pageSize = conversationLimit();
+  private readonly projectLimits = new Map<string, number>();
   private chats: Chat[] = [];
   private complete = false;
   private previousRows = '';
@@ -89,7 +103,7 @@ class CodexChatsListView implements vscode.Disposable {
     scope: Scope;
     grouping: Grouping;
     showFolders: boolean;
-    rows: Chat[];
+    groups: ProjectGroup[];
   };
   private workspaceRepositories = new Map<string, WorkspaceRepository>();
   private checkingRepositories = false;
@@ -134,6 +148,7 @@ class CodexChatsListView implements vscode.Disposable {
   attach(view: vscode.TreeView<TreeNode>): void {
     this.view = view;
     this.updateScopeContext();
+    void vscode.commands.executeCommand('setContext', 'codexChatsList.expandedHistory', false);
     this.context.subscriptions.push(
       view.onDidChangeVisibility(() => this.visibilityChanged()),
       view.onDidExpandElement(({ element }) => this.tree.rememberExpansion(element, true)),
@@ -241,7 +256,7 @@ class CodexChatsListView implements vscode.Disposable {
   }
 
   async setFlag(node: TreeNode | undefined, flag: 'pinned' | 'hidden', enabled: boolean): Promise<void> {
-    if (!node || this.disposed) return;
+    if (!node || node.kind === 'more' || this.disposed) return;
     const store = flag === 'pinned' ? this.pins : this.hidden;
     try {
       await store.set(node.kind, node.kind === 'project' ? node.group.key : node.chat.id, enabled);
@@ -433,7 +448,7 @@ class CodexChatsListView implements vscode.Disposable {
 
   async deleteConversations(node: TreeNode | undefined): Promise<void> {
     const history = this.history;
-    if (!node || !history || this.disposed || this.deleting) return;
+    if (!node || node.kind === 'more' || !history || this.disposed || this.deleting) return;
     if (node.kind === 'project' && !history.complete) {
       void vscode.window.showInformationMessage(t('deleteWaitingForIndex'));
       return;
@@ -514,6 +529,41 @@ class CodexChatsListView implements vscode.Disposable {
     });
   }
 
+  loadMore(node?: MoreNode): void {
+    if (this.disposed || this.search || node?.kind !== 'more') return;
+    if (!this.projectLimits.size) {
+      void vscode.commands.executeCommand('setContext', 'codexChatsList.expandedHistory', true);
+    }
+    const limit = this.projectLimits.get(node.projectKey) ?? this.pageSize;
+    this.projectLimits.set(node.projectKey, limit + this.pageSize);
+    this.render();
+  }
+
+  resetConversationLimits(): void {
+    if (this.disposed) return;
+    this.pageSize = conversationLimit();
+    if (this.projectLimits.size) {
+      this.projectLimits.clear();
+      void vscode.commands.executeCommand('setContext', 'codexChatsList.expandedHistory', false);
+    }
+    this.updateSearchInput();
+    this.render();
+  }
+
+  private searchRangeLabel(): string {
+    return this.searchCoverage === 'recent'
+      ? t('searchRecentCount', { count: this.pageSize }) : t('searchAllConversations');
+  }
+
+  private updateSearchInput(): void {
+    const input = this.searchInput;
+    if (!input) return;
+    input.title = `${t('search')} · ${t(this.scope)} · ${this.searchRangeLabel()}`;
+    input.buttons = this.searchCoverage === 'recent'
+      ? [{ iconPath: new vscode.ThemeIcon('list-flat'), tooltip: t('switchToSearchAll') }]
+      : [{ iconPath: new vscode.ThemeIcon('history'), tooltip: t('switchToSearchRecent', { count: this.pageSize }) }];
+  }
+
   async promptSearch(): Promise<void> {
     if (this.disposed || this.searchInput) return;
     if (!this.view?.visible) await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
@@ -522,7 +572,8 @@ class CodexChatsListView implements vscode.Disposable {
     const input = vscode.window.createInputBox();
     this.searchInput = input;
     const previousSearch = this.search;
-    input.title = `${t('search')} · ${t(this.scope)}`;
+    const previousCoverage = this.searchCoverage;
+    this.updateSearchInput();
     input.placeholder = t('searchPlaceholder');
     input.value = previousSearch;
 
@@ -535,6 +586,11 @@ class CodexChatsListView implements vscode.Disposable {
           ? t('searchTooLong', { count: SEARCH_LIMIT }) : undefined;
         if (value.length <= SEARCH_LIMIT) timer = setTimeout(() => this.setSearch(value), SEARCH_DELAY_MS);
       });
+      const changeCoverage = input.onDidTriggerButton(() => {
+        clearTimeout(timer);
+        const coverage = this.searchCoverage === 'recent' ? 'all' : 'recent';
+        this.setSearch(input.value.length <= SEARCH_LIMIT ? input.value : this.search, coverage);
+      });
       const accept = input.onDidAccept(() => {
         if (input.value.length > SEARCH_LIMIT) return;
         accepted = true;
@@ -545,23 +601,28 @@ class CodexChatsListView implements vscode.Disposable {
         clearTimeout(timer);
         this.searchInput = undefined;
         edit.dispose();
+        changeCoverage.dispose();
         accept.dispose();
         hide.dispose();
         input.dispose();
-        if (!accepted) this.setSearch(previousSearch);
+        if (!accepted) this.setSearch(previousSearch, previousCoverage);
         resolve();
       });
       input.show();
     });
   }
 
-  setSearch(value: string): void {
+  setSearch(value: string, coverage = this.searchCoverage): void {
     const search = value.slice(0, SEARCH_LIMIT).trim();
-    if (this.disposed || search === this.search) return;
+    if (this.disposed || (search === this.search && coverage === this.searchCoverage)) return;
     if (Boolean(search) !== Boolean(this.search)) {
       void vscode.commands.executeCommand('setContext', 'codexChatsList.hasSearch', Boolean(search));
     }
     this.search = search;
+    if (coverage !== this.searchCoverage) {
+      this.searchCoverage = coverage;
+      this.updateSearchInput();
+    }
     this.render();
   }
 
@@ -705,16 +766,21 @@ class CodexChatsListView implements vscode.Disposable {
     const info = [t(this.scope), t(this.grouping)];
     if (!this.showFolders) info.push(t('foldersHidden'));
     if (this.hiddenOnly) info.push(t('hiddenOnly'));
-    if (this.search) info.push(t('activeSearch', { query: this.search }));
+    if (this.search) info.push(this.searchRangeLabel(), t('activeSearch', { query: this.search }));
     const projects = this.viewProjects();
-    const selected = filterTitles(this.viewCandidates(projects), this.search);
     const order = this.scope === 'all' ? this.order : undefined;
-    const groups = groupChats(selected, projects.roots, this.grouping, projects, order).flatMap(group => {
+    const recent = Boolean(this.search) && this.searchCoverage === 'recent';
+    const groups = this.viewGroups(projects).flatMap(group => {
       const hidden = this.hidden.has('project', group.key, group.preferenceAliases);
-      const chats = hidden ? (this.hiddenOnly ? group.chats : [])
-        : group.chats.filter(chat => this.hidden.has('chat', chat.id) === this.hiddenOnly);
+      if (hidden && !this.hiddenOnly) return [];
+      const matches = recent ? group.chats : filterTitles(group.chats, this.search);
+      const visible = hidden ? matches : matches.filter(chat => this.hidden.has('chat', chat.id) === this.hiddenOnly);
+      const chats = recent ? filterTitles(visible.slice(0, this.pageSize), this.search) : visible;
       const pinned = this.pins.has('project', group.key, group.preferenceAliases);
-      return chats.length ? [{ ...group, chats, pinned, hidden, latestConversationAt: chats[0]!.recencyAt }] : [];
+      const visibleLimit = this.search ? undefined : (this.projectLimits.get(group.key) ?? this.pageSize);
+      return chats.length ? [{
+        ...group, chats, pinned, hidden, visibleLimit, latestConversationAt: chats[0]!.recencyAt,
+      }] : [];
     });
     if (this.error) this.view.message = this.error;
     else if (this.scope === 'current' && !this.projects.roots.length) this.view.message = undefined;
@@ -724,7 +790,7 @@ class CodexChatsListView implements vscode.Disposable {
       this.view.message = info.join(' · ');
     }
 
-    this.tree.update(groups, this.scope, Boolean(this.search) || this.hiddenOnly, this.opening);
+    this.tree.update(sortProjectGroups(groups, order), this.scope, Boolean(this.search) || this.hiddenOnly, this.opening);
   }
 
   private viewProjects(chats = this.chats): WorkspaceProjects {
@@ -738,15 +804,16 @@ class CodexChatsListView implements vscode.Disposable {
     return projects;
   }
 
-  private viewCandidates(projects: WorkspaceProjects): Chat[] {
+  private viewGroups(projects: WorkspaceProjects): ProjectGroup[] {
     const cached = this.candidates;
     if (cached?.source === this.chats && cached.projects === projects && cached.scope === this.scope
-      && cached.grouping === this.grouping && cached.showFolders === this.showFolders) return cached.rows;
+      && cached.grouping === this.grouping && cached.showFolders === this.showFolders) return cached.groups;
     const rows = selectChats(this.chats, projects, this.scope, this.grouping, this.showFolders, '');
+    const groups = groupChats(rows, projects.roots, this.grouping, projects);
     this.candidates = {
-      source: this.chats, projects, scope: this.scope, grouping: this.grouping, showFolders: this.showFolders, rows,
+      source: this.chats, projects, scope: this.scope, grouping: this.grouping, showFolders: this.showFolders, groups,
     };
-    return rows;
+    return groups;
   }
 
   /** Metadata-free diagnostics used by the isolated extension-host smoke test. */
@@ -804,10 +871,13 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('codexChatsList.showCurrent', () => provider.setScope('current')),
     vscode.commands.registerCommand('codexChatsList.search', () => provider.promptSearch()),
     vscode.commands.registerCommand('codexChatsList.clearSearch', () => provider.setSearch('')),
+    vscode.commands.registerCommand(LOAD_MORE_CONVERSATIONS, (node?: MoreNode) => provider.loadMore(node)),
+    vscode.commands.registerCommand('codexChatsList.resetConversationLimits', () => provider.resetConversationLimits()),
     vscode.commands.registerCommand(OPEN_CONVERSATION, (id: string) => provider.open(id)),
     vscode.workspace.onDidChangeWorkspaceFolders(() => { void provider.updateWorkspace(); }),
     vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('explorer.decorations.badges')) provider.tree.updateBadgeSetting();
+      if (event.affectsConfiguration('codexChatsList.conversationsPerProject')) provider.resetConversationLimits();
       if (event.affectsConfiguration('codexChatsList.cliPath')
         || (event.affectsConfiguration(`${LEGACY_CONFIG_SECTION}.cliPath`) && ownCliPath() === undefined)) {
         void provider.resetSource();

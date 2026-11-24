@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.17.0
+
+### Added
+
+- Limit each project to 50 visible conversations by default, with a setting, local pagination, and a reset action.
+- Choose between searching the latest configured number of conversations per project and searching all indexed conversations.
+
 ## 1.16.0
 
 ### Added

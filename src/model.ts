@@ -162,7 +162,11 @@ export function groupChats(chats: Chat[], roots: string[], grouping: Grouping = 
   }
   const result = [...groups.values()];
   for (const group of result) group.chats.sort((a, b) => b.recencyAt - a.recencyAt || a.id.localeCompare(b.id));
-  return result.sort((a, b) => {
+  return sortProjectGroups(result, order);
+}
+
+export function sortProjectGroups<T extends ProjectGroup>(groups: T[], order?: GroupOrder): T[] {
+  return groups.sort((a, b) => {
     const byActivity = b.chats[0]!.recencyAt - a.chats[0]!.recencyAt;
     if (!order) return Number(b.current) - Number(a.current) || byActivity || a.cwd.localeCompare(b.cwd);
     return (order === 'recent' ? byActivity : 0) || byGroupName.compare(a.name, b.name) || a.key.localeCompare(b.key);

@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -197,6 +197,12 @@
         "title": "%command.clearSearch%",
         "category": "Codex Chats List",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "codexChatsList.resetConversationLimits",
+        "title": "%command.resetConversationLimits%",
+        "category": "Codex Chats List",
+        "icon": "$(discard)"
       }
     ],
     "menus": {
@@ -245,6 +251,11 @@
           "command": "codexChatsList.refresh",
           "when": "view == codexChatsList.list",
           "group": "navigation@5"
+        },
+        {
+          "command": "codexChatsList.resetConversationLimits",
+          "when": "view == codexChatsList.list && codexChatsList.expandedHistory",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [
@@ -353,6 +364,10 @@
         {
           "command": "codexChatsList.clearSearch",
           "when": "codexChatsList.hasSearch"
+        },
+        {
+          "command": "codexChatsList.resetConversationLimits",
+          "when": "codexChatsList.expandedHistory"
         }
       ]
     },
@@ -364,6 +379,12 @@
           "default": "",
           "scope": "machine",
           "description": "%configuration.cliPath%"
+        },
+        "codexChatsList.conversationsPerProject": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "description": "%configuration.conversationsPerProject%"
         }
       }
     }
