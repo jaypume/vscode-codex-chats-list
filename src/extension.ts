@@ -94,6 +94,7 @@ class CodexChatsListView implements vscode.Disposable {
   private syncing = false;
   private forceRefresh = false;
   private opening: string | null = null;
+  private renaming = false;
   private deleting = false;
   private error = '';
   private ready = false;
@@ -332,6 +333,36 @@ class CodexChatsListView implements vscode.Disposable {
       if (target) void vscode.window.showInformationMessage(t('repositoryMoved', { repository: this.assignmentLabel(id) ?? '' }));
     } catch {
       void vscode.window.showErrorMessage(t('saveAssignmentFailed'));
+    }
+  }
+
+  async renameConversation(node?: TreeNode): Promise<void> {
+    const history = this.history;
+    if (node?.kind !== 'chat' || !history || this.disposed || this.renaming) return;
+    const chat = this.chats.find(item => item.id === node.chat.id);
+    if (!chat) return;
+    this.renaming = true;
+    try {
+      const value = await vscode.window.showInputBox({
+        title: t('renameConversation'),
+        value: chat.title,
+        validateInput: title => title.trim() ? undefined : t('renameEmpty'),
+      });
+      const title = value?.replace(/\s+/g, ' ').trim();
+      if (!title || title === chat.title || this.disposed || this.history !== history) return;
+      const updated = await history.renameThread(chat.id, title);
+      if (this.disposed || this.history !== history) return;
+      if (updated) {
+        if (this.readHistory()) this.render();
+      } else {
+        void vscode.window.showWarningMessage(t('renameIndexFailed'));
+      }
+    } catch (error) {
+      if (this.disposed || this.history !== history) return;
+      const unsupported = (error as { code?: unknown } | null)?.code === -32601;
+      void vscode.window.showErrorMessage(t(unsupported ? 'renameUnsupported' : 'renameFailed'));
+    } finally {
+      this.renaming = false;
     }
   }
 
@@ -697,6 +728,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('codexChatsList.moveToRepository', (node?: TreeNode) => provider.moveConversation(node)),
     vscode.commands.registerCommand('codexChatsList.restoreRepository', (node?: TreeNode) => provider.restoreAssignment(node)),
     vscode.commands.registerCommand('codexChatsList.toggleHidden', () => provider.toggleHidden()),
+    vscode.commands.registerCommand('codexChatsList.rename', (node?: TreeNode) => provider.renameConversation(node)),
     vscode.commands.registerCommand('codexChatsList.delete', (node?: TreeNode) => provider.deleteConversations(node)),
     vscode.commands.registerCommand('codexChatsList.toggleFolders', () => provider.toggleFolders()),
     vscode.commands.registerCommand('codexChatsList.showAll', () => provider.setScope('all')),

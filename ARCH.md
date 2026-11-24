@@ -13,7 +13,7 @@ flowchart LR
   Preferences["扩展全局存储<br/>项目与会话偏好"]
   Repositories["扩展全局存储<br/>仓库身份缓存"]
   UI <-->|"操作和节点更新"| Host
-  Host <-->|"本地 stdio：列表和确认后的删除"| Server
+  Host <-->|"本地 stdio：查询、重命名与删除"| Server
   Host <-->|"列表元数据和同步进度"| Index
   Host <-->|"读写置顶、隐藏和仓库归属"| Preferences
   Git -->|"工作区根目录和已知检出"| Host

@@ -50,7 +50,12 @@ test('a scan started before archiving cannot restore the cached row', async () =
   try {
     const thread = chat('thread-archive');
     expect(store.claim('scan')).toBe(true);
+    store.update(thread, 5, true);
+    store.rename(thread.id, 'Renamed', 15);
+    expect(store.commit('scan', [thread], 10)).toBe(true);
+    expect(store.rows()).toEqual([{ ...thread, title: 'Renamed' }]);
     store.update(thread, 20, false);
+    store.rename(thread.id, 'Late rename', 25);
     expect(store.commit('scan', [thread], 10)).toBe(true);
     expect(store.rows()).toEqual([]);
     expect(store.commit('scan', [thread], 20)).toBe(true);

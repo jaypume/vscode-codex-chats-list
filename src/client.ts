@@ -130,6 +130,13 @@ export class CodexClient {
     }
   }
 
+  async renameThread(id: string, title: string): Promise<void> {
+    await this.start();
+    if (!isRecord(await this.request('thread/name/set', { threadId: id, name: title }))) {
+      throw new Error(this.t('errorInvalidResponse'));
+    }
+  }
+
   async deleteThread(id: string): Promise<void> {
     await this.start();
     if (!isRecord(await this.request('thread/delete', { threadId: id }))) {

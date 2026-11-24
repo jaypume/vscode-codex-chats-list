@@ -21,6 +21,7 @@ export interface HistoryStore {
   commit(token: string, chats: Chat[], observedAt: number, progress?: HistoryProgress): boolean;
   release(token: string): void;
   update(chat: Chat, observedAt: number, available: boolean): void;
+  rename(id: string, title: string, observedAt: number): void;
   close(): void;
 }
 
@@ -53,6 +54,12 @@ class MemoryStore implements HistoryStore {
     if (!previous || observedAt > previous.observedAt
       || (observedAt === previous.observedAt && (!available || previous.available))) {
       this.records.set(chat.id, { chat, observedAt, available });
+    }
+  }
+  rename(id: string, title: string, observedAt: number): void {
+    const current = this.records.get(id);
+    if (current?.available && current.observedAt <= observedAt) {
+      this.records.set(id, { ...current, chat: { ...current.chat, title }, observedAt });
     }
   }
   close() { this.records.clear(); }
@@ -158,6 +165,13 @@ class SqliteStore implements HistoryStore {
 
   update(chat: Chat, observedAt: number, available: boolean): void {
     this.write(this.upsert(), chat, observedAt, available);
+  }
+
+  rename(id: string, title: string, observedAt: number): void {
+    this.db.prepare(`
+      UPDATE history_thread SET title = ?, observed_at = ?
+      WHERE source_key = ? AND thread_id = ? AND available = 1 AND observed_at <= ?
+    `).run(title, observedAt, this.source, id, observedAt);
   }
 
   private upsert() {

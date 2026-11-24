@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.15.0
+
+### Added
+
+- Rename a Codex conversation from its context menu and refresh its title in the shared index.
+
 ## 1.14.0
 
 ### Changed

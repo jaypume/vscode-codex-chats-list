@@ -23,6 +23,7 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 | Pin a project or conversation | Right-click a project group or conversation and choose **Pin** or **Unpin**. Pinned groups come first. Pinned conversations come first within their group. |
 | Hide or restore items | Right-click a project group or conversation and choose **Hide**. Use **… → Toggle Hidden Items View** to find hidden items and right-click **Unhide** to restore them. |
 | Assign a conversation | Right-click a conversation and choose **Move to Repository…**. Pick a known repository or choose a Git folder. In **By Repository**, Current and All follow the assignment. Use **Restore Automatic Grouping** to clear it. |
+| Rename a conversation | Right-click a conversation and choose **Rename Conversation…**. Enter a title to update the conversation in Codex and in the project list. |
 | Delete conversations | Right-click a conversation or project group and choose **Delete Conversations…**. Confirm permanent deletion in Codex. Project deletion covers all indexed conversations in the group, including those excluded by the current filters. |
 | Load and refresh | **Current project** and **All projects** show all matching indexed conversations. Older conversations appear automatically as the index fills. **Refresh Conversations** checks recent activity. |
 

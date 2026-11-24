@@ -102,6 +102,21 @@ export class ConversationHistory {
     } finally { this.finish(); }
   }
 
+  /** Return whether the index write succeeded after Codex saved the name. */
+  async renameThread(id: string, title: string): Promise<boolean> {
+    if (this.disposed) throw new Error('History is closed.');
+    this.active++;
+    try {
+      await this.client.renameThread(id, title);
+      try {
+        this.store.rename(id, title, Date.now());
+        return true;
+      } catch {
+        return false;
+      }
+    } finally { this.finish(); }
+  }
+
   async deleteThread(chat: Chat): Promise<void> {
     if (this.disposed) throw new Error('History is closed.');
     this.active++;

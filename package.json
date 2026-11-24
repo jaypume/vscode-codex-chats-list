@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -162,6 +162,11 @@
         "category": "Codex Chats List"
       },
       {
+        "command": "codexChatsList.rename",
+        "title": "%command.rename%",
+        "category": "Codex Chats List"
+      },
+      {
         "command": "codexChatsList.delete",
         "title": "%command.delete%",
         "category": "Codex Chats List"
@@ -239,6 +244,11 @@
       ],
       "view/item/context": [
         {
+          "command": "codexChatsList.rename",
+          "when": "view == codexChatsList.list && viewItem =~ /^(chat|pinnedChat)(\\.hidden)?(\\.assigned)?$/",
+          "group": "1_item@0"
+        },
+        {
           "command": "codexChatsList.pin",
           "when": "view == codexChatsList.list && viewItem =~ /^(project|chat)(\\.hidden)?(\\.assigned)?$/",
           "group": "1_item@1"
@@ -275,6 +285,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "codexChatsList.rename",
+          "when": "false"
+        },
         {
           "command": "codexChatsList.showAll",
           "when": "false"

@@ -40,6 +40,8 @@ GitHub 确认仓库 ID 后，旧地址和现地址的会话使用同一分组键
 
 删除前，宿主按单条 ID 或分组键从索引获取要删除的会话快照。确认后逐条调用 Codex 的 `thread/delete`，并从共享索引中隐藏已成功删除的记录。删除失败时保留对应记录，并报告成功和失败的数量。
 
+重命名使用 VS Code 原生输入框，默认填入当前标题。确认后，宿主按会话 ID 调用 Codex 的 `thread/name/set`。Codex 保存成功后，宿主更新共享索引中的标题，当前列表和标题筛选随即刷新。
+
 仓库身份缓存位于 `globalStorage/repository-identities-v1/`。每个规范化远程地址对应一个 JSON 文件，文件名使用地址哈希。条目记录 GitHub 仓库 ID、返回的当前远程名称以及查询时间。后台按期限重查，网络不可用时可继续使用缓存。库内会话元数据和旧置顶文件沿用现有格式。
 
 续聊时，`src/routing.ts` 使用 VS Code 生成的窗口 ID，通过 `vscode.open` 将会话 URI 交给本进程的 VS Code 路由。官方 Codex 的 URI handler 随后在目标窗口打开侧栏。

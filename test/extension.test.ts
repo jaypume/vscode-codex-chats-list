@@ -221,7 +221,7 @@ test('all commands use the fork namespace and open focuses the fork view', async
     'codexChatsList.open', 'codexChatsList.refresh', 'codexChatsList.selectScope',
     'codexChatsList.selectGrouping', 'codexChatsList.sortProjects', 'codexChatsList.pin', 'codexChatsList.unpin',
     'codexChatsList.hide', 'codexChatsList.unhide', 'codexChatsList.moveToRepository', 'codexChatsList.restoreRepository',
-    'codexChatsList.toggleHidden', 'codexChatsList.delete',
+    'codexChatsList.toggleHidden', 'codexChatsList.rename', 'codexChatsList.delete',
     'codexChatsList.toggleFolders', 'codexChatsList.showAll', 'codexChatsList.showCurrent',
     'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.openConversation',
   ]);
