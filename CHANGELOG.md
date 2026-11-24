@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.16.0
+
+### Added
+
+- Open a new conversation in the official Codex sidebar from a project group or an Explorer folder.
+
 ## 1.15.0
 
 ### Added

@@ -15,6 +15,7 @@
   "command.unhide": "恢复显示",
   "command.toggleHidden": "切换隐藏项视图",
   "command.rename": "重命名对话…",
+  "command.newConversation": "在此目录新建 Codex 会话",
   "command.delete": "删除对话…",
   "command.moveToRepository": "移至仓库…",
   "command.restoreRepository": "恢复自动归组",

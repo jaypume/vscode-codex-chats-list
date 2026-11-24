@@ -1,6 +1,6 @@
 import { createLocalizer } from './i18n';
 import * as vscode from 'vscode';
-import { access, realpath } from 'node:fs/promises';
+import { access, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { RepositoryAssignments } from './assignments';
 import { CodexClient } from './client';
@@ -47,10 +47,17 @@ async function getBinary(): Promise<string> {
   return binary;
 }
 
+function hostPath(uri: vscode.Uri): string | undefined {
+  if (uri.scheme === 'file' || (vscode.env.remoteName && uri.scheme === 'vscode-remote')) return uri.fsPath;
+}
+
+async function existingDirectory(cwd?: string): Promise<string | undefined> {
+  if (!cwd || !path.isAbsolute(cwd)) return;
+  return stat(cwd).then(info => info.isDirectory() ? cwd : undefined, () => undefined);
+}
+
 async function workspaceRoots(): Promise<string[]> {
-  const roots = (vscode.workspace.workspaceFolders ?? [])
-    .filter(folder => folder.uri.scheme === 'file' || (vscode.env.remoteName && folder.uri.scheme === 'vscode-remote'))
-    .map(folder => folder.uri.fsPath);
+  const roots = (vscode.workspace.workspaceFolders ?? []).flatMap(folder => hostPath(folder.uri) ?? []);
   const resolved = await Promise.all(roots.map(async root => { try { return await realpath(root); } catch { return root; } }));
   return uniquePaths([...roots, ...resolved]);
 }
@@ -94,6 +101,7 @@ class CodexChatsListView implements vscode.Disposable {
   private syncing = false;
   private forceRefresh = false;
   private opening: string | null = null;
+  private creating?: { client?: CodexClient };
   private renaming = false;
   private deleting = false;
   private error = '';
@@ -366,6 +374,63 @@ class CodexChatsListView implements vscode.Disposable {
     }
   }
 
+  async newConversation(target?: TreeNode | vscode.Uri): Promise<void> {
+    if (!target || this.disposed || this.creating) return;
+    const candidate = 'scheme' in target ? hostPath(target)
+      : target.kind === 'project' ? target.group.cwd : undefined;
+    if (candidate === undefined) return;
+    const pending: { client?: CodexClient } = {};
+    const generation = this.generation;
+    const current = () => !this.disposed && this.generation === generation;
+    this.creating = pending;
+    let id: string | undefined;
+    try {
+      let cwd = await existingDirectory(candidate);
+      if (!current()) return;
+      if (!cwd) {
+        const [folder] = await vscode.window.showOpenDialog({
+          title: t('chooseConversationFolder'),
+          canSelectFolders: true, canSelectFiles: false,
+          defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri,
+        }) ?? [];
+        if (!folder || !current()) return;
+        cwd = await existingDirectory(hostPath(folder));
+        if (!current()) return;
+        if (!cwd) {
+          void vscode.window.showWarningMessage(t('conversationFolderUnavailable'));
+          return;
+        }
+      }
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: t('creatingConversation'),
+      }, async () => {
+        const binary = await getBinary();
+        if (!current()) return;
+        const client = new CodexClient(binary, this.context.extension.packageJSON.version, vscode.env.language);
+        pending.client = client;
+        try {
+          id = await client.createThread(cwd, t('newConversationTitle'));
+        } finally {
+          // Release the temporary writer before the official sidebar resumes the thread.
+          await client.close();
+          pending.client = undefined;
+        }
+      });
+      if (id && current()) await openInCodex(id);
+    } catch {
+      if (!current()) return;
+      if (id) {
+        const action = await vscode.window.showErrorMessage(t('newConversationOpenFailed'), t('copyId'));
+        if (action) await vscode.env.clipboard.writeText(id);
+      } else {
+        void vscode.window.showErrorMessage(t('newConversationFailed'));
+      }
+    } finally {
+      this.creating = undefined;
+    }
+  }
+
   async deleteConversations(node: TreeNode | undefined): Promise<void> {
     const history = this.history;
     if (!node || !history || this.disposed || this.deleting) return;
@@ -509,8 +574,10 @@ class CodexChatsListView implements vscode.Disposable {
   }
 
   async resetSource(): Promise<void> {
-    if (!this.ready || this.disposed) return;
+    if (this.disposed) return;
     this.generation++;
+    this.creating?.client?.dispose();
+    if (!this.ready) return;
     this.connecting?.dispose();
     this.connecting = undefined;
     this.history?.dispose();
@@ -698,6 +765,7 @@ class CodexChatsListView implements vscode.Disposable {
     clearTimeout(this.dateRefreshTimer);
     clearTimeout(this.repositoryRenderTimer);
     this.searchInput?.hide();
+    this.creating?.client?.dispose();
     this.connecting?.dispose();
     this.history?.dispose();
     this.tree.dispose();
@@ -728,6 +796,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('codexChatsList.moveToRepository', (node?: TreeNode) => provider.moveConversation(node)),
     vscode.commands.registerCommand('codexChatsList.restoreRepository', (node?: TreeNode) => provider.restoreAssignment(node)),
     vscode.commands.registerCommand('codexChatsList.toggleHidden', () => provider.toggleHidden()),
+    vscode.commands.registerCommand('codexChatsList.newConversation', (target?: TreeNode | vscode.Uri) => provider.newConversation(target)),
     vscode.commands.registerCommand('codexChatsList.rename', (node?: TreeNode) => provider.renameConversation(node)),
     vscode.commands.registerCommand('codexChatsList.delete', (node?: TreeNode) => provider.deleteConversations(node)),
     vscode.commands.registerCommand('codexChatsList.toggleFolders', () => provider.toggleFolders()),

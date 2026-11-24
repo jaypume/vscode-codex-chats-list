@@ -137,6 +137,16 @@ export class CodexClient {
     }
   }
 
+  async createThread(cwd: string, title: string): Promise<string> {
+    await this.start();
+    const reply = await this.request('thread/start', { cwd });
+    const [thread] = parsePage({ data: [isRecord(reply) ? reply.thread : undefined] }, this.t).chats;
+    if (!thread) throw new Error(this.t('errorInvalidResponse'));
+    // An empty thread needs a saved title before a different app-server can resume it.
+    await this.renameThread(thread.id, title);
+    return thread.id;
+  }
+
   async deleteThread(id: string): Promise<void> {
     await this.start();
     if (!isRecord(await this.request('thread/delete', { threadId: id }))) {
@@ -147,6 +157,14 @@ export class CodexClient {
   private fail(error: Error): void {
     for (const item of this.pending.values()) { clearTimeout(item.timer); item.reject(error); }
     this.pending.clear();
+  }
+
+  async close(): Promise<void> {
+    const child = this.process;
+    const exit = child?.pid && child.exitCode === null && child.signalCode === null
+      ? new Promise<void>(resolve => child.once('exit', () => resolve())) : undefined;
+    this.dispose();
+    await exit;
   }
 
   /** Close only the stdio process owned by this client; never terminate another Codex server. */

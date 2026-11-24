@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -162,6 +162,11 @@
         "category": "Codex Chats List"
       },
       {
+        "command": "codexChatsList.newConversation",
+        "title": "%command.newConversation%",
+        "category": "Codex Chats List"
+      },
+      {
         "command": "codexChatsList.rename",
         "title": "%command.rename%",
         "category": "Codex Chats List"
@@ -244,6 +249,11 @@
       ],
       "view/item/context": [
         {
+          "command": "codexChatsList.newConversation",
+          "when": "view == codexChatsList.list && viewItem =~ /^(project|pinnedProject)(\\.hidden)?$/",
+          "group": "1_item@0"
+        },
+        {
           "command": "codexChatsList.rename",
           "when": "view == codexChatsList.list && viewItem =~ /^(chat|pinnedChat)(\\.hidden)?(\\.assigned)?$/",
           "group": "1_item@0"
@@ -284,7 +294,18 @@
           "group": "2_repository@2"
         }
       ],
+      "explorer/context": [
+        {
+          "command": "codexChatsList.newConversation",
+          "when": "explorerResourceIsFolder && isWorkspaceTrusted && (resourceScheme == file || resourceScheme == vscode-remote)",
+          "group": "2_workspace"
+        }
+      ],
       "commandPalette": [
+        {
+          "command": "codexChatsList.newConversation",
+          "when": "false"
+        },
         {
           "command": "codexChatsList.rename",
           "when": "false"
