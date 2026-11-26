@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.17.2
+
+### Changed
+
+- Show up to 20 conversations per project by default.
+
 ## 1.17.1
 
 ### Changed

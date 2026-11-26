@@ -1,7 +1,7 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.17.1",
+  "version": "1.17.2",
   "private": true,
   "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
   "categories": [
@@ -382,7 +382,7 @@
         },
         "codexChatsList.conversationsPerProject": {
           "type": "integer",
-          "default": 50,
+          "default": 20,
           "minimum": 1,
           "description": "%configuration.conversationsPerProject%"
         }

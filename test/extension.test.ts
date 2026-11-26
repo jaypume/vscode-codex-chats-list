@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   cliPath: undefined as string | undefined,
   legacyCliPath: '/fixture/codex',
   dateBadges: true,
-  conversationLimit: 50,
+  conversationLimit: undefined as number | undefined,
 }));
 vi.mock('../src/client', () => ({ CodexClient: class {
   constructor(...args: unknown[]) { mocks.construct(...args); }
@@ -48,9 +48,9 @@ vi.mock('vscode', () => ({
   workspace: {
     workspaceFolders: [{ uri: { scheme: 'file', fsPath: '/fixture' } }],
     getConfiguration: (section: string) => ({
-      get: (key: string) => section === 'codexProjectChats' ? mocks.legacyCliPath
+      get: (key: string, defaultValue?: unknown) => section === 'codexProjectChats' ? mocks.legacyCliPath
         : section === 'explorer.decorations' ? mocks.dateBadges
-        : section === 'codexChatsList' && key === 'conversationsPerProject' ? mocks.conversationLimit : false,
+        : section === 'codexChatsList' && key === 'conversationsPerProject' ? (mocks.conversationLimit ?? defaultValue) : false,
       inspect: () => ({ globalValue: mocks.cliPath, defaultValue: '' }),
     }),
     onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
@@ -214,7 +214,7 @@ beforeEach(() => {
   mocks.updateScope.mockReset().mockResolvedValue(undefined);
   mocks.cliPath = undefined;
   mocks.dateBadges = true;
-  mocks.conversationLimit = 50;
+  mocks.conversationLimit = undefined;
   mocks.legacyCliPath = '/fixture/codex';
 });
 afterEach(() => {
@@ -386,23 +386,26 @@ test('Current caps each project while older conversations remain available from 
   await fixture.ready();
   const children = () => fixture.tree.getChildren().flatMap(node => fixture.tree.getChildren(node));
   const visibleChats = () => children().filter(node => node.kind === 'chat');
-  expect(visibleChats()).toHaveLength(50);
+  expect(visibleChats()).toHaveLength(20);
   expect(fixture.tree.getChildren()).toHaveLength(1);
   expect(fixture.api.snapshot().indexed).toBe(false);
   await vi.advanceTimersByTimeAsync(150);
-  expect(visibleChats()).toHaveLength(50);
+  expect(visibleChats()).toHaveLength(20);
   expect(fixture.tree.getChildren()).toHaveLength(1);
   expect(fixture.api.snapshot().indexed).toBe(true);
   expect(fixture.tree.getTreeItem(fixture.tree.getChildren()[0]!).tooltip).toContain('60 chats');
   const more = children().at(-1)!;
   expect(fixture.tree.getTreeItem(more)).toMatchObject({ label: 'Load more conversations' });
   await fixture.run('loadMoreConversations', more);
+  expect(visibleChats()).toHaveLength(40);
+  expect(children().at(-1)).toMatchObject({ kind: 'more' });
+  await fixture.run('loadMoreConversations', children().at(-1));
   expect(visibleChats()).toHaveLength(60);
   expect(children()).toHaveLength(60);
   expect(mocks.executeCommand).toHaveBeenCalledWith('setContext', 'codexChatsList.expandedHistory', true);
 
   const draft = await fixture.beginSearch();
-  expect(draft.input.title).toContain('Latest 50 per project');
+  expect(draft.input.title).toContain('Latest 20 per project');
   draft.input.type('thread-59');
   await vi.advanceTimersByTimeAsync(120);
   expect(visibleChats()).toHaveLength(0);
@@ -414,7 +417,7 @@ test('Current caps each project while older conversations remain available from 
   expect(visibleChats()).toHaveLength(60);
 
   await fixture.run('resetConversationLimits');
-  expect(visibleChats()).toHaveLength(50);
+  expect(visibleChats()).toHaveLength(20);
   expect(children().at(-1)).toMatchObject({ kind: 'more' });
   expect(mocks.executeCommand).toHaveBeenCalledWith('setContext', 'codexChatsList.expandedHistory', false);
   await fixture.search('thread-59');

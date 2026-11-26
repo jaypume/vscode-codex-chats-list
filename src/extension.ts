@@ -22,7 +22,7 @@ const OFFICIAL_ID = 'openai.chatgpt';
 const INDEX_STEP_MS = 150;
 const SEARCH_LIMIT = 200;
 const SEARCH_DELAY_MS = 120;
-const DEFAULT_CONVERSATION_LIMIT = 50;
+const DEFAULT_CONVERSATION_LIMIT = 20;
 const LEGACY_CONFIG_SECTION = 'codexProjectChats';
 type SearchCoverage = 'recent' | 'all';
 
