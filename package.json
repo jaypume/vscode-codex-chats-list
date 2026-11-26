@@ -1,9 +1,9 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.17.3",
+  "version": "1.18.0",
   "private": true,
-  "description": "Browse Codex conversations by project and continue in the official Codex editor.",
+  "description": "Browse Codex conversations by project and continue in the official Codex sidebar or editor.",
   "categories": [
     "AI",
     "Chat"
@@ -167,6 +167,11 @@
         "category": "Codex Chats List"
       },
       {
+        "command": "codexChatsList.openInEditor",
+        "title": "%command.openInEditor%",
+        "category": "Codex Chats List"
+      },
+      {
         "command": "codexChatsList.rename",
         "title": "%command.rename%",
         "category": "Codex Chats List"
@@ -265,6 +270,11 @@
           "group": "1_item@0"
         },
         {
+          "command": "codexChatsList.openInEditor",
+          "when": "view == codexChatsList.list && viewItem =~ /^(chat|pinnedChat)(\\.hidden)?(\\.assigned)?$/",
+          "group": "0_open"
+        },
+        {
           "command": "codexChatsList.rename",
           "when": "view == codexChatsList.list && viewItem =~ /^(chat|pinnedChat)(\\.hidden)?(\\.assigned)?$/",
           "group": "1_item@0"
@@ -313,6 +323,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "codexChatsList.openInEditor",
+          "when": "false"
+        },
         {
           "command": "codexChatsList.newConversation",
           "when": "false"

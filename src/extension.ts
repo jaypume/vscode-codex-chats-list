@@ -8,7 +8,7 @@ import { findRepositories, inspectDirectory, projectNameForDirectory, type Repos
 import { ConversationHistory, HEAD_REFRESH_MS } from './history';
 import { ItemFlags } from './item-flags';
 import { RepositoryCatalog } from './repositories';
-import { openInCodex } from './routing';
+import { openInCodex, type CodexOpenTarget } from './routing';
 import {
   filterTitles, groupChats, pathKey, selectChats, sortProjectGroups, uniquePaths,
   type Chat, type Grouping, type GroupOrder, type ProjectGroup, type Scope, type WorkspaceProjects,
@@ -25,7 +25,7 @@ const SEARCH_DELAY_MS = 120;
 const DEFAULT_CONVERSATION_LIMIT = 20;
 const LEGACY_CONFIG_SECTION = 'codexProjectChats';
 type SearchCoverage = 'recent' | 'all';
-type ConversationNavigation = { id?: string; controller: AbortController };
+type ConversationNavigation = { id?: string; target: CodexOpenTarget; controller: AbortController };
 
 function conversationLimit(): number {
   const limit = vscode.workspace.getConfiguration('codexChatsList')
@@ -741,11 +741,12 @@ class CodexChatsListView implements vscode.Disposable {
     return rowsChanged || progressChanged;
   }
 
-  async open(id: string): Promise<void> {
+  async open(id: string, target: CodexOpenTarget = 'sidebar'): Promise<void> {
     const chat = this.chats.find(item => item.id === id);
     const history = this.history;
-    if (this.disposed || this.navigation?.id === id || !chat || !history) return;
-    const navigation = this.beginNavigation(id);
+    if (this.disposed || !chat || !history) return;
+    if (this.navigation?.id === id && this.navigation.target === target) return;
+    const navigation = this.beginNavigation(id, target);
     try {
       await this.navigateConversation(id, navigation);
       if (!navigation.controller.signal.aborted && this.history === history) {
@@ -756,9 +757,9 @@ class CodexChatsListView implements vscode.Disposable {
     }
   }
 
-  private beginNavigation(id?: string): ConversationNavigation {
+  private beginNavigation(id?: string, target: CodexOpenTarget = 'sidebar'): ConversationNavigation {
     this.navigation?.controller.abort();
-    const navigation = { id, controller: new AbortController() };
+    const navigation = { id, target, controller: new AbortController() };
     this.navigation = navigation;
     this.render();
     return navigation;
@@ -774,7 +775,7 @@ class CodexChatsListView implements vscode.Disposable {
     const { signal } = navigation.controller;
     if (signal.aborted) return;
     try {
-      await openInCodex(id, signal);
+      await openInCodex(id, { target: navigation.target, signal });
     } catch (error) {
       if (signal.aborted) return;
       const detail = error instanceof Error ? error.message : t('errorOpenFailed');
@@ -792,7 +793,7 @@ class CodexChatsListView implements vscode.Disposable {
     try {
       await history.refreshConversation(chat);
       if (!this.disposed && this.history === history && this.readHistory()) this.render();
-    } catch { /* Metadata refresh is independent of the editor handoff. */ }
+    } catch { /* Metadata refresh is independent of opening the conversation. */ }
   }
 
   private render(): void {
@@ -909,6 +910,9 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(LOAD_MORE_CONVERSATIONS, (node?: MoreNode) => provider.loadMore(node)),
     vscode.commands.registerCommand('codexChatsList.resetConversationLimits', () => provider.resetConversationLimits()),
     vscode.commands.registerCommand(OPEN_CONVERSATION, (id: string) => provider.open(id)),
+    vscode.commands.registerCommand('codexChatsList.openInEditor', (node?: TreeNode) => {
+      if (node?.kind === 'chat') return provider.open(node.chat.id, 'editor');
+    }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => { void provider.updateWorkspace(); }),
     vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('explorer.decorations.badges')) provider.tree.updateBadgeSetting();

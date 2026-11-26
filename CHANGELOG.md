@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.18.0
+
+### Added
+
+- Open a conversation in the Codex editor from its context menu.
+
+### Changed
+
+- Open existing and new conversations in the official Codex sidebar by default. Hand off sidebar requests only while the initiating window is focused.
+
 ## 1.17.3
 
 ### Fixed

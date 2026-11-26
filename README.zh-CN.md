@@ -2,14 +2,14 @@
 
 [English](README.md) · 简体中文
 
-按项目浏览已有的 Codex 对话，并在官方 Codex 编辑页中继续。VS Code 原生项目树支持分组和标题搜索。
+按项目浏览已有的 Codex 对话，并在官方 Codex 侧栏中继续。VS Code 原生项目树支持分组和标题搜索。
 
 ## 安装和浏览
 
 1. 安装并登录 [官方 Codex 扩展](https://marketplace.visualstudio.com/items?itemName=openai.chatgpt)。
 2. 在扩展商店搜索 `@id:pujie.codex-chats-list` 安装 **Codex Chats List**。使用离线包时，选择 **扩展 → … → 从 VSIX 安装**。
 3. 打开项目文件夹，点击活动栏的 **Codex 对话列表**。也可在命令面板执行 **Codex Chats List: 打开项目对话**。
-4. 展开项目并选择对话，会话在当前窗口的官方 Codex 编辑页打开。
+4. 展开项目并选择对话，在官方 Codex 侧栏打开。需要编辑器标签页时，右键点击对话并选择 **在 Codex 编辑页打开**。
 
 [Marketplace 商品页](https://marketplace.visualstudio.com/items?itemName=pujie.codex-chats-list) · [反馈问题](https://github.com/jaypume/vscode-codex-chats-list/issues)
 
@@ -24,7 +24,7 @@
 | 隐藏或恢复显示 | 右键点击项目分组或对话，选择 **隐藏**。通过 **… → 切换隐藏项视图** 查看隐藏项，再右键选择 **恢复显示**。 |
 | 手动归属对话 | 右键点击对话，选择 **移至仓库…**，可选已有仓库或指定 Git 目录。**按 Git 仓库** 的当前和全部项目都使用手动归属。右键选择 **恢复自动归组** 可撤销。 |
 | 重命名对话 | 右键点击对话，选择 **重命名对话…**。输入新标题后，Codex 中的原会话和项目列表都会更新。 |
-| 在目录中开启新会话 | 右键点击项目分组或资源管理器中的文件夹，选择 **在此目录新建 Codex 会话**。记录的目录失效时可重新选择。新会话以 Git 仓库名或文件夹名作为标题，在当前窗口的官方 Codex 编辑页打开。 |
+| 在目录中开启新会话 | 右键点击项目分组或资源管理器中的文件夹，选择 **在此目录新建 Codex 会话**。记录的目录失效时可重新选择。新会话以 Git 仓库名或文件夹名作为标题，在官方 Codex 侧栏打开。 |
 | 删除对话 | 右键点击对话或项目分组，选择 **删除对话…**，确认后在 Codex 中永久删除。项目删除覆盖该分组的全部已索引对话，包括被当前筛选隐藏的对话。 |
 | 加载和刷新 | 每个项目初始最多显示 20 条对话，可通过 `codexChatsList.conversationsPerProject` 调整。项目底部的 **加载更多对话** 从索引展开更早条目。点击 **重置对话列表长度** 或重启 VS Code 后会恢复设置值。点击 **刷新对话** 检查近期活动。 |
 
@@ -63,7 +63,7 @@ GitHub 仓库改名后，扩展可按确认的仓库 ID 合并历史。分组详
 | 打开对话失败 | 可重试或从官方 Codex 历史中打开。反馈时请附上两个扩展的版本。 |
 | WSL、SSH 或容器 | 在远程工作区安装两个扩展。会话记录按宿主读取。Windows 将 Codex 转发到 WSL 时，请打开 WSL 工作区。 |
 
-扩展通过本地官方 `codex app-server` 的 `thread/list` 读取会话 ID、标题、工作目录、最近对话时间和可用的 Git 远程元数据，并启用 `useStateDbOnly`。没有标题时可使用服务提供的首条消息摘要。官方可执行文件管理自己的运行状态和日志。官方 Codex 编辑页通过 VS Code 编辑器服务打开。
+扩展通过本地官方 `codex app-server` 的 `thread/list` 读取会话 ID、标题、工作目录、最近对话时间和可用的 Git 远程元数据，并启用 `useStateDbOnly`。没有标题时可使用服务提供的首条消息摘要。官方可执行文件管理自己的运行状态和日志。侧栏使用 VS Code 的活动窗口路由，编辑页使用发起窗口的编辑器服务。
 
 Codex Chats List 1.2.1 可以与 Codex Project Chats 同时启用。未配置 `codexChatsList.cliPath` 时，fork 读取旧的 `codexProjectChats.cliPath`。把新设置显式设为空字符串即可使用官方扩展内置的可执行文件。如果给 fork 的打开或刷新命令绑定了快捷键，请改绑 `codexChatsList.open` 或 `codexChatsList.refresh`。可将新的活动栏入口拖回习惯的位置。
 

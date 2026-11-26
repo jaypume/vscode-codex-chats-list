@@ -231,7 +231,7 @@ test('all commands use the fork namespace and open focuses the fork view', async
     'codexChatsList.toggleHidden', 'codexChatsList.newConversation', 'codexChatsList.rename', 'codexChatsList.delete',
     'codexChatsList.toggleFolders', 'codexChatsList.showAll', 'codexChatsList.showCurrent',
     'codexChatsList.search', 'codexChatsList.clearSearch', 'codexChatsList.loadMoreConversations',
-    'codexChatsList.resetConversationLimits', 'codexChatsList.openConversation',
+    'codexChatsList.resetConversationLimits', 'codexChatsList.openConversation', 'codexChatsList.openInEditor',
   ]);
   await fixture.run('open');
   expect(mocks.executeCommand).toHaveBeenCalledWith('codexChatsList.list.focus');
@@ -682,7 +682,7 @@ test('opens before inspecting metadata and removes a confirmed archived entry in
   await fixture.run('openConversation', 'thread-default');
   expect(mocks.checkThread).toHaveBeenCalledExactlyOnceWith('thread-default');
   expect(mocks.openConversation).toHaveBeenCalledTimes(2);
-  expect(mocks.openConversation).toHaveBeenLastCalledWith('thread-default', expect.any(AbortSignal));
+  expect(mocks.openConversation).toHaveBeenLastCalledWith('thread-default', { target: 'sidebar', signal: expect.any(AbortSignal) });
   expect(fixture.api.snapshot().count).toBe(1);
   completeMetadata(undefined);
   await vi.advanceTimersByTimeAsync(0);
@@ -697,7 +697,7 @@ test('a newer conversation takes over an in-flight open and duplicate clicks are
   mocks.list.mockResolvedValueOnce(initial);
   const fixture = await setup();
   await fixture.ready();
-  mocks.openConversation.mockImplementationOnce((_id: string, signal: AbortSignal) =>
+  mocks.openConversation.mockImplementationOnce((_id: string, { signal }: { signal: AbortSignal }) =>
     new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })));
   const first = fixture.run('openConversation', 'thread-first');
   await fixture.run('openConversation', 'thread-first');
@@ -705,6 +705,17 @@ test('a newer conversation takes over an in-flight open and duplicate clicks are
   await first;
   expect(mocks.openConversation.mock.calls.map(([id]) => id)).toEqual(['thread-first', 'thread-second']);
   expect(mocks.checkThread).toHaveBeenCalledExactlyOnceWith('thread-second');
+});
+
+test('the conversation context action opens the editor and ignores group nodes', async () => {
+  const fixture = await setup();
+  await fixture.ready();
+  const group = fixture.tree.getChildren()[0];
+  await fixture.run('openInEditor', group);
+  await fixture.run('openInEditor', fixture.tree.getChildren(group)[0]);
+  expect(mocks.openConversation).toHaveBeenCalledExactlyOnceWith(
+    'thread-default', { target: 'editor', signal: expect.any(AbortSignal) },
+  );
 });
 
 test('project and conversation dates use the latest visible activity and refresh at local midnight', async () => {

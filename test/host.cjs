@@ -26,7 +26,7 @@ exports.run = async () => {
   let currentWindowEditor = false;
   if (process.env.CODEX_CHATS_LIST_TEST_THREAD) {
     const { openInCodex } = require('../dist/extension/routing.js');
-    await openInCodex(process.env.CODEX_CHATS_LIST_TEST_THREAD);
+    await openInCodex(process.env.CODEX_CHATS_LIST_TEST_THREAD, { target: 'editor' });
     await until(() => {
       const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
       return input instanceof vscode.TabInputCustom

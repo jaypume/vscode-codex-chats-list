@@ -16,6 +16,7 @@
   "command.toggleHidden": "Toggle Hidden Items View",
   "command.rename": "Rename Conversation…",
   "command.newConversation": "New Codex Conversation Here",
+  "command.openInEditor": "Open in Codex Editor",
   "command.delete": "Delete Conversations…",
   "command.moveToRepository": "Move to Repository…",
   "command.restoreRepository": "Restore Automatic Grouping",
