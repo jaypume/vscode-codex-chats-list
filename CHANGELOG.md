@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.17.1
+
+### Changed
+
+- Use the Git repository or folder name as the initial title of a conversation created from a directory.
+
 ## 1.17.0
 
 ### Added

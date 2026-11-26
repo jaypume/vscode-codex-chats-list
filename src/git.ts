@@ -83,6 +83,22 @@ export async function inspectDirectory(folder: string): Promise<Directory> {
   }
 }
 
+async function repositoryRemotes(folder: string): Promise<(string | undefined)[]> {
+  const remotes = await Promise.all([
+    git(folder, 'remote', 'get-url', 'origin'),
+    git(folder, 'remote', 'get-url', 'upstream'),
+  ]);
+  return remotes.map(repositoryKey);
+}
+
+export async function projectNameForDirectory(folder: string): Promise<string> {
+  const directory = await inspectDirectory(folder);
+  if (directory.kind !== 'git') return path.basename(folder);
+  const [origin, upstream] = await repositoryRemotes(folder);
+  const remote = origin ?? upstream;
+  return remote ? path.posix.basename(remote) : path.basename(directory.root);
+}
+
 export async function findRepositories(
   folders: string[],
 ): Promise<Map<string, WorkspaceRepository>> {
@@ -93,12 +109,7 @@ export async function findRepositories(
   const matches = new Map<string, WorkspaceRepository>();
   const upstreams: [string, WorkspaceRepository][] = [];
   for (const root of roots) {
-    const [origin, upstream] = (
-      await Promise.all([
-        git(root, 'remote', 'get-url', 'origin'),
-        git(root, 'remote', 'get-url', 'upstream'),
-      ])
-    ).map(repositoryKey);
+    const [origin, upstream] = await repositoryRemotes(root);
     const key = origin ?? upstream;
     if (!key) continue;
     const repository = { key, root };

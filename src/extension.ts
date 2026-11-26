@@ -4,7 +4,7 @@ import { access, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { RepositoryAssignments } from './assignments';
 import { CodexClient } from './client';
-import { findRepositories, inspectDirectory, type RepositoryTarget, type WorkspaceRepository } from './git';
+import { findRepositories, inspectDirectory, projectNameForDirectory, type RepositoryTarget, type WorkspaceRepository } from './git';
 import { ConversationHistory, HEAD_REFRESH_MS } from './history';
 import { ItemFlags } from './item-flags';
 import { RepositoryCatalog } from './repositories';
@@ -420,12 +420,12 @@ class CodexChatsListView implements vscode.Disposable {
         location: vscode.ProgressLocation.Notification,
         title: t('creatingConversation'),
       }, async () => {
-        const binary = await getBinary();
+        const [binary, projectName] = await Promise.all([getBinary(), projectNameForDirectory(cwd)]);
         if (!current()) return;
         const client = new CodexClient(binary, this.context.extension.packageJSON.version, vscode.env.language);
         pending.client = client;
         try {
-          id = await client.createThread(cwd, t('newConversationTitle'));
+          id = await client.createThread(cwd, projectName.trim() || t('newConversationTitle'));
         } finally {
           // Release the temporary writer before the official sidebar resumes the thread.
           await client.close();
