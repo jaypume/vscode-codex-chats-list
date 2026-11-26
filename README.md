@@ -2,14 +2,14 @@
 
 English · [简体中文](README.zh-CN.md)
 
-Browse Codex conversations by project, then continue in the official Codex sidebar. The native VS Code tree supports project groups and title search.
+Browse Codex conversations by project, then continue in the official Codex editor. The native VS Code tree supports project groups and title search.
 
 ## Install and browse
 
 1. Install and sign in to the [official Codex extension](https://marketplace.visualstudio.com/items?itemName=openai.chatgpt).
 2. Search `@id:pujie.codex-chats-list` in VS Code to install **Codex Chats List**, or choose **Extensions → … → Install from VSIX** for a local package.
 3. Open a project folder and select **Codex Chats List** in the Activity Bar. You can also run **Codex Chats List: Open Project Chats** from the Command Palette.
-4. Expand a project and select a conversation. It opens in the existing official Codex sidebar, wherever you placed it.
+4. Expand a project and select a conversation. It opens in the official Codex editor in the current window.
 
 [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=pujie.codex-chats-list) · [Report a problem](https://github.com/jaypume/vscode-codex-chats-list/issues)
 
@@ -24,7 +24,7 @@ Browse Codex conversations by project, then continue in the official Codex sideb
 | Hide or restore items | Right-click a project group or conversation and choose **Hide**. Use **… → Toggle Hidden Items View** to find hidden items and right-click **Unhide** to restore them. |
 | Assign a conversation | Right-click a conversation and choose **Move to Repository…**. Pick a known repository or choose a Git folder. In **By Repository**, Current and All follow the assignment. Use **Restore Automatic Grouping** to clear it. |
 | Rename a conversation | Right-click a conversation and choose **Rename Conversation…**. Enter a title to update the conversation in Codex and in the project list. |
-| Start a conversation in a folder | Right-click a project group or an Explorer folder and choose **New Codex Conversation Here**. If the recorded directory is unavailable, choose a folder. The conversation takes its title from the Git repository or folder and opens in the official Codex sidebar in the current window. |
+| Start a conversation in a folder | Right-click a project group or an Explorer folder and choose **New Codex Conversation Here**. If the recorded directory is unavailable, choose a folder. The conversation takes its title from the Git repository or folder and opens in the official Codex editor in the current window. |
 | Delete conversations | Right-click a conversation or project group and choose **Delete Conversations…**. Confirm permanent deletion in Codex. Project deletion covers all indexed conversations in the group, including those excluded by the current filters. |
 | Load and refresh | Each project initially shows up to 20 conversations. Change this in **Conversations Per Project** (`codexChatsList.conversationsPerProject`). Use **Load more conversations** at the bottom of a project to show more from the index. **Reset Conversation List Lengths** or restarting VS Code restores the configured limit. **Refresh Conversations** checks recent activity. |
 
@@ -60,10 +60,10 @@ The manifest requires VS Code 1.100 or newer. The extension follows the VS Code 
 | --- | --- |
 | Empty current-project tree | Try **By Repository** for conversations from another checkout or worktree. **All projects** shows other indexed directories too. |
 | Codex binary unavailable | Enable the official extension or set `codexChatsList.cliPath` to an absolute executable path on the current host. |
-| Opening a conversation fails | Open the official Codex sidebar and retry. Include both extension versions when reporting the issue, since the navigation URI comes from the official extension. |
+| Opening a conversation fails | Retry or open the conversation from official Codex history. Include both extension versions when reporting the issue. |
 | WSL, SSH, or a container | Install both extensions in the remote workspace. History stays on each host. For Windows with Codex running in WSL, open the project in a WSL window. |
 
-The extension reads conversation IDs, titles, working directories, recent conversation times, and available Git remote metadata from the local bundled `codex app-server`. It uses `thread/list` with `useStateDbOnly`. When a title is missing, the server's first-message preview can supply the label. The official executable manages its internal state and logs. Navigation uses the official extension's existing `/local/<id>` URI handler.
+The extension reads conversation IDs, titles, working directories, recent conversation times, and available Git remote metadata from the local bundled `codex app-server`. It uses `thread/list` with `useStateDbOnly`. When a title is missing, the server's first-message preview can supply the label. The official executable manages its internal state and logs. The official Codex editor opens through VS Code's editor service.
 
 Codex Chats List 1.2.1 can run alongside Codex Project Chats. When `codexChatsList.cliPath` is unset, the fork reads the previous `codexProjectChats.cliPath` value. Set the new key to an empty string to use the official extension's bundled executable. If you assigned a shortcut to the fork's open or refresh command, update it to `codexChatsList.open` or `codexChatsList.refresh`. You can move the new activity bar entry to your preferred position.
 

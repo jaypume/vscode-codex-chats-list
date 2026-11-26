@@ -161,8 +161,24 @@ export class CodexClient {
 
   async close(): Promise<void> {
     const child = this.process;
-    const exit = child?.pid && child.exitCode === null && child.signalCode === null
-      ? new Promise<void>(resolve => child.once('exit', () => resolve())) : undefined;
+    if (!child?.pid || child.exitCode !== null || child.signalCode !== null) {
+      this.dispose();
+      return;
+    }
+    const exit = new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(force);
+        clearTimeout(timeout);
+        child.off('exit', exited);
+      };
+      const exited = () => { cleanup(); resolve(); };
+      const force = setTimeout(() => child.kill('SIGKILL'), 1_500);
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error(this.t('errorWriterStillRunning')));
+      }, 3_000);
+      child.once('exit', exited);
+    });
     this.dispose();
     await exit;
   }
@@ -173,7 +189,7 @@ export class CodexClient {
     this.process = undefined;
     this.starting = undefined;
     this.fail(new Error(this.t('errorClosed')));
-    if (child && child.exitCode === null) {
+    if (child && child.exitCode === null && child.signalCode === null) {
       child.stdin.end();
       child.kill();
     }

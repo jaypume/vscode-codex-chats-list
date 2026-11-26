@@ -1,26 +1,48 @@
 import { createLocalizer } from './i18n';
 import * as vscode from 'vscode';
 
-/**
- * Resume a conversation in the official Codex sidebar already placed by the user.
- *
- * This adapter uses an existing, undocumented Codex URI route. Keeping it
- * here limits future compatibility changes to one place, without patching Codex.
- */
-export async function openInCodex(id: string): Promise<void> {
+const CODEX_EDITOR = 'chatgpt.conversationEditor';
+const OPEN_TIMEOUT_MS = 8_000;
+
+/** Open the official Codex editor through the current workbench's editor service. */
+export async function openInCodex(id: string, signal?: AbortSignal): Promise<void> {
   const t = createLocalizer(vscode.env.language);
   if (!/^[a-z0-9_-]{8,128}$/i.test(id)) throw new Error(t('errorInvalidId'));
+  signal?.throwIfAborted();
   const official = vscode.extensions.getExtension('openai.chatgpt');
   if (!official) throw new Error(t('errorEnableOfficial'));
-  await official.activate();
-  const route = vscode.Uri.from({
-    scheme: vscode.env.uriScheme, authority: 'openai.chatgpt', path: `/local/${id}`,
-  });
-  const target = await vscode.env.asExternalUri(route);
-  if (target.scheme !== route.scheme || target.authority !== route.authority || target.path !== route.path
-    || !/^\d+$/.test(new URLSearchParams(target.query).get('windowId') ?? '')) {
-    throw new Error(t('errorRouteRejected'));
+  const editors: unknown = official.packageJSON?.contributes?.customEditors;
+  if (!Array.isArray(editors) || !editors.some(editor => editor?.viewType === CODEX_EDITOR)) {
+    throw new Error(t('errorEditorUnavailable'));
   }
-  // Use the workbench's URI opener so windowId is resolved inside this VS Code process.
-  await vscode.commands.executeCommand('vscode.open', target);
+
+  const deadline = new AbortController();
+  const cancellation = signal ? AbortSignal.any([signal, deadline.signal]) : deadline.signal;
+  const timeout = setTimeout(() => deadline.abort(new Error(t('errorOpenTimeout'))), OPEN_TIMEOUT_MS);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => reject(cancellation.reason);
+      cancellation.addEventListener('abort', abort, { once: true });
+      const open = async () => {
+        try {
+          await official.activate();
+          cancellation.throwIfAborted();
+          // The official custom editor consumes this resource directly in the invoking window.
+          const resource = vscode.Uri.from({ scheme: 'openai-codex', authority: 'route', path: `/local/${id}` });
+          await vscode.commands.executeCommand('vscode.openWith', resource, CODEX_EDITOR, {
+            viewColumn: vscode.ViewColumn.Active,
+            preview: true,
+          });
+          resolve();
+        } catch {
+          reject(cancellation.aborted ? cancellation.reason : new Error(t('errorOpenFailed')));
+        } finally {
+          cancellation.removeEventListener('abort', abort);
+        }
+      };
+      void open();
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }

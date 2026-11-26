@@ -33,7 +33,7 @@ Use a separate VS Code profile and a disposable workspace to verify the native s
 
 - Explain the user-visible problem, the change, and the checks you ran.
 - Keep behavior, refactoring, and unrelated formatting in separate changes.
-- Preserve the existing official sidebar when opening conversations.
+- Open conversations in the official Codex editor of the initiating VS Code window.
 - Never include real transcripts, conversation IDs, personal paths, credentials, or account details in fixtures or screenshots.
 - Update both README entry points when usage or compatibility changes. English is canonical; `README.zh-CN.md` is the maintained Chinese companion. The product interface follows the VS Code display language, with Simplified Chinese and English translations.
 - Use Conventional Commit subjects, for example `fix(routing): 🐛 preserve the existing Codex view`.

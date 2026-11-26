@@ -26,7 +26,7 @@ const english = {
   "conversationFolderUnavailable": "Choose a folder accessible on this VS Code host.",
   "creatingConversation": "Creating Codex conversation…",
   "newConversationFailed": "Could not create a Codex conversation. Check the folder and Codex connection, then try again.",
-  "newConversationOpenFailed": "The conversation was created. Opening it in the Codex sidebar failed.",
+  "newConversationOpenFailed": "The conversation was saved.",
   "renameConversation": "Rename Conversation",
   "renameEmpty": "Enter a conversation title.",
   "renameUnsupported": "Update Codex to rename conversations.",
@@ -59,7 +59,6 @@ const english = {
   "foldersHidden": "Non-Git folders hidden",
   "indexing": "Indexing history…",
   "unknownSource": "Source unknown",
-  "threadUnavailable": "This conversation is archived or no longer available.",
   "currentBadge": "Current",
   "unknownTime": "Unknown",
   "recentConversation": "Recent conversation",
@@ -80,7 +79,9 @@ const english = {
   "errorArchitecture": "Set the Codex executable path manually for this host architecture.",
   "errorBinaryMissing": "The bundled Codex executable was not found. Set its path in the extension settings.",
   "errorReadFailed": "Could not load conversations. Refresh to retry.",
-  "errorOpenFailed": "Could not open the official Codex conversation. Open Codex and retry; an upstream update may have changed the navigation route.",
+  "errorOpenFailed": "Could not open the conversation in the Codex editor. Try again or copy the conversation ID.",
+  "errorOpenTimeout": "Waiting for the Codex editor timed out. Try again or copy the conversation ID.",
+  "errorWriterStillRunning": "The temporary Codex process did not exit. Reopen the conversation from Codex history.",
   "copyId": "Copy conversation ID",
   "errorDisconnected": "The Codex connection was lost. Refresh to retry.",
   "errorRequestFailed": "The Codex API request failed.",
@@ -93,7 +94,7 @@ const english = {
   "errorInvalidResponse": "Codex returned an unrecognized conversation list format.",
   "errorInvalidId": "The conversation ID format is invalid.",
   "errorEnableOfficial": "Enable the official Codex extension first.",
-  "errorRouteRejected": "The official Codex extension did not accept the sidebar navigation request."
+  "errorEditorUnavailable": "The installed Codex extension does not provide the conversation editor. Open the conversation from Codex history."
 } as const;
 
 export type MessageKey = keyof typeof english;
@@ -127,7 +128,7 @@ const chinese: Messages = {
   "conversationFolderUnavailable": "请选择当前 VS Code 宿主能访问的文件夹。",
   "creatingConversation": "正在创建 Codex 会话…",
   "newConversationFailed": "无法创建 Codex 会话。请检查工作目录和 Codex 连接后重试。",
-  "newConversationOpenFailed": "会话已创建，官方 Codex 侧栏打开失败。",
+  "newConversationOpenFailed": "会话已保存。",
   "renameConversation": "重命名对话",
   "renameEmpty": "请输入对话标题。",
   "renameUnsupported": "请更新 Codex 后再重命名对话。",
@@ -160,7 +161,6 @@ const chinese: Messages = {
   "foldersHidden": "已隐藏普通文件夹",
   "indexing": "正在建立历史索引…",
   "unknownSource": "来源未确认",
-  "threadUnavailable": "此对话已归档或无法找到。",
   "currentBadge": "当前",
   "unknownTime": "时间未知",
   "recentConversation": "最近对话",
@@ -181,7 +181,9 @@ const chinese: Messages = {
   "errorArchitecture": "此主机架构需要手动设置 Codex 可执行文件路径。",
   "errorBinaryMissing": "未找到官方内置 Codex。请在扩展设置中指定 Codex 可执行文件路径。",
   "errorReadFailed": "读取对话失败，请刷新重试。",
-  "errorOpenFailed": "未能打开官方 Codex 对话。可先打开 Codex 后重试；官方更新也可能影响跳转入口。",
+  "errorOpenFailed": "未能在 Codex 编辑页打开对话。请重试或复制会话 ID。",
+  "errorOpenTimeout": "等待 Codex 编辑页超时。请重试或复制会话 ID。",
+  "errorWriterStillRunning": "临时 Codex 进程未退出。可稍后从 Codex 历史中打开会话。",
   "copyId": "复制会话 ID",
   "errorDisconnected": "Codex 连接已断开，请刷新重试。",
   "errorRequestFailed": "Codex 接口请求失败。",
@@ -194,7 +196,7 @@ const chinese: Messages = {
   "errorInvalidResponse": "Codex 返回了无法识别的列表格式。",
   "errorInvalidId": "会话 ID 格式不正确。",
   "errorEnableOfficial": "请先启用官方 Codex 扩展。",
-  "errorRouteRejected": "官方 Codex 未接受侧栏跳转请求。"
+  "errorEditorUnavailable": "当前安装的 Codex 扩展未提供会话编辑页。可从 Codex 历史中打开会话。"
 };
 
 /** Match supported display languages; all other languages fall back to English. */

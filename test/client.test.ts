@@ -13,6 +13,8 @@ test.skipIf(process.platform === 'win32')('stdio handshake and list requests kee
   const trace = path.join(folder, 'trace.jsonl');
   await fs.writeFile(binary, `#!/usr/bin/env node
 const readline = require('node:readline'); const fs = require('node:fs');
+process.on('SIGTERM', () => {});
+setInterval(() => {}, 10_000);
 readline.createInterface({input:process.stdin}).on('line', line => {
   const msg=JSON.parse(line); fs.appendFileSync(${JSON.stringify(trace)}, line+'\\n');
   if (msg.id === undefined) return;

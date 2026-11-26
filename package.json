@@ -1,9 +1,9 @@
 {
   "name": "codex-chats-list",
   "displayName": "Codex Chats List",
-  "version": "1.17.2",
+  "version": "1.17.3",
   "private": true,
-  "description": "Browse Codex conversations by project and continue in the official Codex sidebar.",
+  "description": "Browse Codex conversations by project and continue in the official Codex editor.",
   "categories": [
     "AI",
     "Chat"

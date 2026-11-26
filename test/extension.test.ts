@@ -667,7 +667,7 @@ test('title search debounces live matches, restores on Escape, and follows Curre
   expect(mocks.list).toHaveBeenCalledExactlyOnceWith(undefined, '', null);
 });
 
-test('validates the selected ID before navigating and removes a confirmed archived entry', async () => {
+test('opens before inspecting metadata and removes a confirmed archived entry in the background', async () => {
   const fixture = await setup();
   await fixture.ready();
   const group = fixture.tree.getChildren()[0]!;
@@ -675,14 +675,36 @@ test('validates the selected ID before navigating and removes a confirmed archiv
     id: 'chat:thread-default',
     tooltip: expect.stringContaining('Path: /fixture'),
   });
+  let completeMetadata!: (chat: Chat | undefined) => void;
+  mocks.checkThread.mockImplementationOnce(() => new Promise(resolve => { completeMetadata = resolve; }));
   await fixture.run('openConversation', 'thread-default');
   await fixture.run('openConversation', 'missing');
-  expect(mocks.checkThread).toHaveBeenCalledExactlyOnceWith('thread-default');
-  expect(mocks.openConversation).toHaveBeenCalledExactlyOnceWith('thread-default');
-  mocks.checkThread.mockResolvedValueOnce(undefined);
   await fixture.run('openConversation', 'thread-default');
+  expect(mocks.checkThread).toHaveBeenCalledExactlyOnceWith('thread-default');
+  expect(mocks.openConversation).toHaveBeenCalledTimes(2);
+  expect(mocks.openConversation).toHaveBeenLastCalledWith('thread-default', expect.any(AbortSignal));
+  expect(fixture.api.snapshot().count).toBe(1);
+  completeMetadata(undefined);
+  await vi.advanceTimersByTimeAsync(0);
   expect(fixture.api.snapshot().count).toBe(0);
-  expect(mocks.openConversation).toHaveBeenCalledTimes(1);
+  await fixture.run('openConversation', 'thread-default');
+  expect(mocks.openConversation).toHaveBeenCalledTimes(2);
+});
+
+test('a newer conversation takes over an in-flight open and duplicate clicks are coalesced', async () => {
+  const initial = page('thread-first');
+  initial.chats.push(page('thread-second').chats[0]!);
+  mocks.list.mockResolvedValueOnce(initial);
+  const fixture = await setup();
+  await fixture.ready();
+  mocks.openConversation.mockImplementationOnce((_id: string, signal: AbortSignal) =>
+    new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })));
+  const first = fixture.run('openConversation', 'thread-first');
+  await fixture.run('openConversation', 'thread-first');
+  await fixture.run('openConversation', 'thread-second');
+  await first;
+  expect(mocks.openConversation.mock.calls.map(([id]) => id)).toEqual(['thread-first', 'thread-second']);
+  expect(mocks.checkThread).toHaveBeenCalledExactlyOnceWith('thread-second');
 });
 
 test('project and conversation dates use the latest visible activity and refresh at local midnight', async () => {

@@ -7,7 +7,7 @@ flowchart LR
   Git["工作区 Git"]
   GitHub["GitHub 仓库元数据"]
   Server["Codex app-server"]
-  Codex["官方 Codex 侧栏"]
+  Codex["当前窗口的官方 Codex 编辑页"]
   Prefs["工作区状态<br/>范围、排序和展开偏好"]
   Index["扩展全局存储<br/>共享会话索引"]
   Preferences["扩展全局存储<br/>项目与会话偏好"]
@@ -20,9 +20,9 @@ flowchart LR
   GitHub -->|"仓库 ID 和规范名称"| Host
   Host <-->|"远程地址与仓库身份"| Repositories
   Host <-->|"保存视图偏好"| Prefs
-  Host -->|"VS Code 内部窗口 URI"| Codex
+  Host -->|"VS Code 编辑器服务"| Codex
 ```
 
-宿主从本地 app-server 首次逐页同步，再从共享索引按范围、目录或仓库加载树节点。同一存储范围下只有持有租约的窗口回源同步。点开会话时，宿主按 ID 校验该条元数据后跳转到官方侧栏。
+宿主从本地 app-server 首次逐页同步，再从共享索引按范围、目录或仓库加载树节点。同一存储范围下只有持有租约的窗口执行历史同步。点开会话时，宿主将会话 ID 交给当前窗口的编辑器服务，再在后台校验共享索引中的条目。
 
 查询与视图行为见 [DESIGN.md](DESIGN.md)，存储结构见 [history-schema.md](docs/history-schema.md)。

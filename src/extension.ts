@@ -25,6 +25,7 @@ const SEARCH_DELAY_MS = 120;
 const DEFAULT_CONVERSATION_LIMIT = 20;
 const LEGACY_CONFIG_SECTION = 'codexProjectChats';
 type SearchCoverage = 'recent' | 'all';
+type ConversationNavigation = { id?: string; controller: AbortController };
 
 function conversationLimit(): number {
   const limit = vscode.workspace.getConfiguration('codexChatsList')
@@ -114,7 +115,7 @@ class CodexChatsListView implements vscode.Disposable {
   private workspaceGeneration = 0;
   private syncing = false;
   private forceRefresh = false;
-  private opening: string | null = null;
+  private navigation?: ConversationNavigation;
   private creating?: { client?: CodexClient };
   private renaming = false;
   private deleting = false;
@@ -398,6 +399,7 @@ class CodexChatsListView implements vscode.Disposable {
     const generation = this.generation;
     const current = () => !this.disposed && this.generation === generation;
     this.creating = pending;
+    const navigation = this.beginNavigation();
     let id: string | undefined;
     try {
       let cwd = await existingDirectory(candidate);
@@ -432,17 +434,17 @@ class CodexChatsListView implements vscode.Disposable {
           pending.client = undefined;
         }
       });
-      if (id && current()) await openInCodex(id);
+      if (id && current()) await this.navigateConversation(id, navigation, true);
     } catch {
       if (!current()) return;
       if (id) {
-        const action = await vscode.window.showErrorMessage(t('newConversationOpenFailed'), t('copyId'));
-        if (action) await vscode.env.clipboard.writeText(id);
+        this.reportNavigationFailure(id, `${t('newConversationOpenFailed')} ${t('errorWriterStillRunning')}`);
       } else {
         void vscode.window.showErrorMessage(t('newConversationFailed'));
       }
     } finally {
       this.creating = undefined;
+      this.finishNavigation(navigation);
     }
   }
 
@@ -637,6 +639,8 @@ class CodexChatsListView implements vscode.Disposable {
   async resetSource(): Promise<void> {
     if (this.disposed) return;
     this.generation++;
+    this.navigation?.controller.abort();
+    this.navigation = undefined;
     this.creating?.client?.dispose();
     if (!this.ready) return;
     this.connecting?.dispose();
@@ -740,25 +744,55 @@ class CodexChatsListView implements vscode.Disposable {
   async open(id: string): Promise<void> {
     const chat = this.chats.find(item => item.id === id);
     const history = this.history;
-    if (this.opening || !chat || !history) return;
-    this.opening = id;
-    this.render();
+    if (this.disposed || this.navigation?.id === id || !chat || !history) return;
+    const navigation = this.beginNavigation(id);
     try {
-      let available = true;
-      try { available = await history.verify(chat); }
-      catch { /* Let the official view handle navigation if metadata validation is unavailable. */ }
-      if (this.disposed || this.history !== history) return;
-      this.readHistory();
-      if (available) await openInCodex(id);
-      else void vscode.window.showInformationMessage(t('threadUnavailable'));
-    } catch {
-      void vscode.window.showErrorMessage(t('errorOpenFailed'), t('copyId')).then(action => {
-        if (action) void vscode.env.clipboard.writeText(id);
-      });
+      await this.navigateConversation(id, navigation);
+      if (!navigation.controller.signal.aborted && this.history === history) {
+        void this.refreshOpenedConversation(history, chat);
+      }
     } finally {
-      this.opening = null;
-      this.render();
+      this.finishNavigation(navigation);
     }
+  }
+
+  private beginNavigation(id?: string): ConversationNavigation {
+    this.navigation?.controller.abort();
+    const navigation = { id, controller: new AbortController() };
+    this.navigation = navigation;
+    this.render();
+    return navigation;
+  }
+
+  private finishNavigation(navigation: ConversationNavigation): void {
+    if (this.navigation !== navigation) return;
+    this.navigation = undefined;
+    this.render();
+  }
+
+  private async navigateConversation(id: string, navigation: ConversationNavigation, created = false): Promise<void> {
+    const { signal } = navigation.controller;
+    if (signal.aborted) return;
+    try {
+      await openInCodex(id, signal);
+    } catch (error) {
+      if (signal.aborted) return;
+      const detail = error instanceof Error ? error.message : t('errorOpenFailed');
+      this.reportNavigationFailure(id, created ? `${t('newConversationOpenFailed')} ${detail}` : detail);
+    }
+  }
+
+  private reportNavigationFailure(id: string, message: string): void {
+    void vscode.window.showErrorMessage(message, t('copyId')).then(action => {
+      if (action) void vscode.env.clipboard.writeText(id);
+    });
+  }
+
+  private async refreshOpenedConversation(history: ConversationHistory, chat: Chat): Promise<void> {
+    try {
+      await history.refreshConversation(chat);
+      if (!this.disposed && this.history === history && this.readHistory()) this.render();
+    } catch { /* Metadata refresh is independent of the editor handoff. */ }
   }
 
   private render(): void {
@@ -790,7 +824,7 @@ class CodexChatsListView implements vscode.Disposable {
       this.view.message = info.join(' · ');
     }
 
-    this.tree.update(sortProjectGroups(groups, order), this.scope, Boolean(this.search) || this.hiddenOnly, this.opening);
+    this.tree.update(sortProjectGroups(groups, order), this.scope, Boolean(this.search) || this.hiddenOnly, this.navigation?.id ?? null);
   }
 
   private viewProjects(chats = this.chats): WorkspaceProjects {
@@ -832,6 +866,7 @@ class CodexChatsListView implements vscode.Disposable {
     clearTimeout(this.dateRefreshTimer);
     clearTimeout(this.repositoryRenderTimer);
     this.searchInput?.hide();
+    this.navigation?.controller.abort();
     this.creating?.client?.dispose();
     this.connecting?.dispose();
     this.history?.dispose();

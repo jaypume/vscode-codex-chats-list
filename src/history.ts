@@ -8,6 +8,7 @@ export const HEAD_REFRESH_MS = 5_000;
 
 export class ConversationHistory {
   private readonly directories = new Map<string, Directory>();
+  private readonly refreshing = new Set<string>();
   private active = 0;
   private disposed = false;
 
@@ -81,25 +82,28 @@ export class ConversationHistory {
     }
   }
 
-  async verify(chat: Chat): Promise<boolean> {
-    if (this.disposed) return false;
+  async refreshConversation(chat: Chat): Promise<void> {
+    if (this.disposed || this.refreshing.has(chat.id)) return;
+    this.refreshing.add(chat.id);
     this.active++;
     const observedAt = Date.now();
     try {
       const result = await this.client.checkThread(chat.id);
-      if (this.disposed) return false;
+      if (this.disposed) return;
       if (!result) {
         this.store.update(chat, observedAt, false);
-        return false;
+        return;
       }
       if (!result.repository) {
         result.directory = await inspectDirectory(result.cwd);
-        if (this.disposed) return false;
+        if (this.disposed) return;
         this.directories.set(pathKey(result.cwd), result.directory);
       }
       this.store.update(result, observedAt, true);
-      return true;
-    } finally { this.finish(); }
+    } finally {
+      this.refreshing.delete(chat.id);
+      this.finish();
+    }
   }
 
   /** Return whether the index write succeeded after Codex saved the name. */

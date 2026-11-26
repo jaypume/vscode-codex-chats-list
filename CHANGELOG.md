@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.17.3
+
+### Fixed
+
+- Open existing and new conversations in the official Codex editor of the initiating VS Code window.
+- Refresh cached conversation metadata in the background and bound the wait for Codex when opening.
+
 ## 1.17.2
 
 ### Changed
